@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BOM>
+	<BO>
+		<AdmInfo>
+			<requestUser>manager</requestUser>
+			<requestDataTime>2020-11-26 12:38:16</requestDataTime>
+			<requestDB>METMI_TEST</requestDB>
+			<Object>13</Object>
+			<Version>2</Version>
+		</AdmInfo>
+		<Documents>
+			<row>
+				<Series>94</Series>
+				<DocNum>2023200004</DocNum>
+				<CardCode>CM002735</CardCode>
+				<ShipToCode>PIETRO PELLIZZARI</ShipToCode>
+				<DocDate>20230223</DocDate>
+				<TaxDate>20230223</TaxDate>
+				<DocCurrency>EUR</DocCurrency>
+				<PaymentMethod>CBI</PaymentMethod>
+				<PaymentGroupCode>54</PaymentGroupCode>
+				<DocTotal>183.00</DocTotal>
+				<U_B1SYS_INV_TYPE>TD01</U_B1SYS_INV_TYPE>
+			</row>
+		</Documents>
+		<Document_Lines>
+			<row>
+				<ItemCode>MEcdATI2023</ItemCode>
+				<ItemDescription>Corso ECM ATI14 anno 2023 - Pellizzaro</ItemDescription>
+				<Quantity>1</Quantity>
+				<LineTotal>181.00</LineTotal>
+				<VatGroup>Ves10n20</VatGroup>
+				<AccountCode>47006050040</AccountCode>
+			</row>
+			<row>
+				<ItemCode>MEbollo02</ItemCode>
+				<ItemDescription>Marca da bollo</ItemDescription>
+				<Quantity>1</Quantity>
+				<LineTotal>2.00</LineTotal>
+				<VatGroup>Vesc15</VatGroup>
+				<AccountCode>47006050999</AccountCode>
+			</row>
+		</Document_Lines>
+		<Document_Installments>
+			<row>
+				<DueDate>20230223</DueDate>
+				<Total>183.00</Total>
+			</row>
+		</Document_Installments>
+	</BO>
+</BOM>
