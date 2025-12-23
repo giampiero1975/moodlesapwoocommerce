@@ -1,0 +1,27 @@
+
+[2025-12-22 Mon 14:27:53] : **************
+
+[2025-12-22 Mon 14:27:53] : {PARSE URL} : array (
+  0 => '',
+  1 => 'index.php',
+  2 => 'sap',
+  3 => 'ins',
+)
+[2025-12-22 Mon 14:27:53] : {VARDUMP} : array (
+  'id' => '100',
+)
+[2025-12-22 Mon 14:27:53] : Recupero record da moodle_payments per ID: 100
+[2025-12-22 Mon 14:27:53] : SQL: select * from moodle_payments where id=100
+ > entro in italia
+method: UserController::insInvoice
+[2025-12-22 Mon 14:27:53] : Recupero record da moodle_payments per ID: 100
+[2025-12-22 Mon 14:27:53] : SQL: select * from moodle_payments where id=100
+[2025-12-22 Mon 14:27:53] : {VARDUMP} : array (
+  'id' => 100,
+  'payment_id' => 9773,
+  'mdl' => 'mdl_formazioneoss',
+  'courseid' => 30,
+  'userid' => 616,
+  'cost' => '5.00',
+  'tipo' => 'woocommerce',
+)

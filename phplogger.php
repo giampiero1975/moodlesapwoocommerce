@@ -8,6 +8,7 @@ define("DATESTRING_FULL", "Y-m-d D H:i:s");
  *
  * @author
  */
+#[\AllowDynamicProperties]
 class Logger
 {
     private static $logger          = NULL;     // Instance of the logger class when default log file is in use.

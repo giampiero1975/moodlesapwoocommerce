@@ -11,6 +11,7 @@ require_once PROJECT_ROOT_PATH . 'Model/MoodleModel.php';
 // Inclusione per il nuovo connettore WooCommerce
 require_once PROJECT_ROOT_PATH . 'Model/WooCommerceModel.php';
 
+#[\AllowDynamicProperties]
 class UserController extends BaseController
 {
     // ===================================================================
@@ -33,13 +34,25 @@ class UserController extends BaseController
         // 1. Recupera i dati base dalla tabella 'moodle_payments'.
         $this->arrQueryStringParams = $this->getQueryStringParams();
         $paymentDetails = $this->getMoodlePayments($this->arrQueryStringParams["id"]);
-        $this->arrQueryStringParams = $paymentDetails; // Mantiene la compatibilit�
+        $this->arrQueryStringParams = $paymentDetails; // Mantiene la compatibilità
         $logger->dump($this->arrQueryStringParams);
         
         try {
             // 2. GET dei dati da WooCommerce tramite API
             $wcModel = new WooCommerceModel($paymentDetails['mdl']);
             $orderData = $wcModel->getOrderById($paymentDetails['payment_id']);
+            
+            // --- INIZIO SONDA DI VERIFICA ---
+            echo "<h3>--- DEBUG DATO GREZZO ESTRATTO ---</h3>";
+            echo "<pre>";
+            // Stampiamo il nome e cognome come escono dalla query, e anche la codifica rilevata
+            $nomeGrezzo = $orderData['billing']['first_name'] . ' ' . $orderData['billing']['last_name'];
+            var_dump($nomeGrezzo);
+            echo "Encoding rilevato: " . mb_detect_encoding($nomeGrezzo, 'UTF-8, ISO-8859-1', true);
+            echo "\nHex Dump: " . bin2hex($nomeGrezzo); // Vediamo i byte reali
+            echo "</pre>";
+            // die("--- STOP VERIFICA ---");
+            // --- FINE SONDA ---
             
             if (!$orderData) {
                 $logger->log("Errore: Impossibile recuperare i dati dell'ordine " . $paymentDetails['payment_id'] . " da WooCommerce.");
@@ -142,35 +155,72 @@ class UserController extends BaseController
      * V2.0: Nuovo metodo "TRADUTTORE" (MAPPER)
      * Converte i dati ricevuti dall'API di WooCommerce nella vecchia struttura dati.
      */
+    /**
+     * VERSIONE DEFINITIVA: Pulizia Dati + Fix Data Bonifico
+     */
     private function mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails) {
         $billing = $orderData["billing"];
         
-        $cf = ''; $piva = ''; $pec = ''; $sdi = '';
+        // =================================================================
+        // 1. QUI AVVIENE LA CHIAMATA: "sanitizeString" entra in azione
+        // =================================================================
+        
+        // Pulisce Nome + Cognome
+        $nome = $this->sanitizeString($billing['first_name'] . ' ' . $billing['last_name']);
+        
+        // Pulisce Indirizzo
+        $indirizzo = $this->sanitizeString($billing['address_1']);
+        
+        // Pulisce Città
+        $citta = $this->sanitizeString($billing['city']);
+        
+        // Pulisce Azienda
+        $azienda = $this->sanitizeString($billing['company']);
+        
+        // =================================================================
+        
+        // Logica Ragione Sociale (usa i dati puliti)
+        $ragioneSociale = !empty($azienda) ? $azienda : $nome;
+        
+        // ... [Recupero Meta Dati - RIMANE UGUALE] ...
+        $cf = ''; $piva = ''; $pec = ''; $sdi = ''; $dataBonifico = '';
         foreach ($orderData['meta_data'] as $meta) {
+            // ... (Codice esistente per recupero CF/PIVA/Date) ...
             if (isset($meta['key'])) {
                 switch ($meta['key']) {
-                    case 'billing_cf': case '_billing_cf': $cf = $meta['value']; break;
-                    case 'billing_piva': case '_billing_piva': $piva = $meta['value']; break;
-                    case 'billing_pec': case '_billing_pec': $pec = $meta['value']; break;
-                    case 'billing_sdi': case '_billing_sdi': $sdi = $meta['value']; break;
+                    case 'billing_cf': case '_billing_cf':
+                        $cf = strtoupper(trim($meta['value'])); break;
+                    case 'billing_piva': case '_billing_piva':
+                        $piva = strtoupper(trim($meta['value'])); break;
+                    case 'billing_pec': case '_billing_pec':
+                        $pec = trim($meta['value']); break;
+                    case 'billing_sdi': case '_billing_sdi':
+                        $sdi = strtoupper(trim($meta['value'])); break;
+                        
+                    case 'bacs_date': case '_bacs_date':
+                        $dObj = DateTime::createFromFormat('d/m/Y', $meta['value']);
+                        $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $meta['value'];
+                        break;
                 }
             }
         }
+        if (empty($dataBonifico)) { $dataBonifico = $orderData['date_created']; }
         
+        // Costruzione Array (Usa le variabili pulite sopra)
         $cliente = [];
         $cliente[0] = [
-            'nome' => $billing['first_name'] . ' ' . $billing['last_name'],
-            'email' => $billing['email'],
-            'Rag' => !empty($billing['company']) ? $billing['company'] : $billing['first_name'] . ' ' . $billing['last_name'],
-            'CF' => strtoupper($cf),
-            'partitaiva' => strtoupper($piva),
-            'fattind' => $billing['address_1'],
-            'fattcomune' => $billing['city'],
-            'fattcap' => $billing['postcode'],
-            'fattprov' => $billing['state'],
-            'telefono' => $billing['phone'],
-            'PEC' => $pec,
-            'IPACodePA' => $sdi
+            'nome'       => $nome,           // <--- DATO PULITO
+            'email'      => $billing['email'],
+            'Rag'        => $ragioneSociale, // <--- DATO PULITO
+            'CF'         => $cf,
+            'partitaiva' => $piva,
+            'fattind'    => $indirizzo,      // <--- DATO PULITO
+            'fattcomune' => $citta,          // <--- DATO PULITO
+            'fattcap'    => $billing['postcode'],
+            'fattprov'   => $billing['state'],
+            'telefono'   => $billing['phone'],
+            'PEC'        => $pec,
+            'IPACodePA'  => $sdi
         ];
         
         $config = new costanti();
@@ -179,10 +229,19 @@ class UserController extends BaseController
             $idnumber_sap = $config::WOOCOMMERCE_INSTANCES[$paymentDetails['mdl']]['idnumber_sap'];
         }
         
+        // =================================================================
+        // 2. CHIAMATA ANCHE PER IL PRODOTTO (Importante per il PDF)
+        // =================================================================
+        $rawItemName = $orderData['line_items'][0]['name'];
+        
+        // Pulisce il nome del corso/prodotto
+        $cleanItemName = $this->sanitizeString($rawItemName);
+        
         $cliente[1] = [
-            'cost' => $paymentDetails['cost'],
-            'fullname' => $orderData['line_items'][0]['name'],
-            'idnumber' => $idnumber_sap
+            'cost'          => $paymentDetails['cost'],
+            'fullname'      => $cleanItemName, // <--- DATO PULITO
+            'idnumber'      => $idnumber_sap,
+            'datapagamento' => $dataBonifico
         ];
         
         return $cliente;
@@ -245,6 +304,24 @@ class UserController extends BaseController
             }
             
             $logger->log("getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:");
+            
+            // --- INIZIO CORREZIONE: Pulizia dei dati SAP recuperati per Mojibake ---
+            // Puliamo i campi di testo SAP più comuni
+            $bp_fields_to_clean = ['cardname', 'ShipToDef', 'BillToDef', 'NameAddressB', 'NameAddressS', 'Address', 'City', 'Prov', 'MailAddres', 'MailCity', 'MailProv'];
+            
+            foreach ($bp_fields_to_clean as $key) {
+                // $this->clienteSap è l'array con i dati SAP
+                if (isset($this->clienteSap[$key]) && is_string($this->clienteSap[$key])) {
+                    $value = $this->clienteSap[$key];
+                    // 1. Decodifica entità HTML
+                    $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    // 2. Tenta di risolvere il Mojibake
+                    $value = mb_convert_encoding(mb_convert_encoding(mb_convert_encoding($value, 'ISO-8859-1', 'UTF-8'), 'UTF-8', 'ISO-8859-1'), 'UTF-8', 'ISO-8859-1');
+                    $this->clienteSap[$key] = trim($value);
+                }
+            }
+            // --- FINE CORREZIONE ---
+            
             $logger->dump($this->clienteSap);
             return $this->clienteSap;
         } catch (Exception $e) {
@@ -480,7 +557,7 @@ class UserController extends BaseController
                 $this->XmlBp = $this->createXMLBP();
                 
                 if ($this->sendWS($this->XmlBp) == true) {
-                    // allineo modalit� di pagamento CBI dopo inserimento
+                    // allineo modalità di pagamento CBI dopo inserimento
                     $userSap = new SapModel();
                     $logger->log("Recupero i dati SAP dopo inserimento WS");
                     $this->BPSAP = $this->getSapUser(); // GET delle modifiche fatte
@@ -786,6 +863,14 @@ class UserController extends BaseController
             $this->datiInvoice['docnum'] = $this->docNum;
             $this->datiInvoice['cardcode'] = $this->BPSAP['cardcode'];
             
+            // --- INIZIO CORREZIONE FINALE: Pulizia ItemDescription per XML ---
+            $itemDescriptionRaw = $this->sapArticle[0]['itemname'] . ' - ' . $this->userMoodle['0']['nome'];
+            
+            // Applica la pulizia al nome completo prima di metterlo nell'XML
+            $cleanedItemDescription = html_entity_decode($itemDescriptionRaw, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $cleanedItemDescription = utf8_encode(utf8_decode($cleanedItemDescription));
+            // --- FINE CORREZIONE FINALE ---
+            
             $this->invxmlArticles = '<Document_Lines>';
             $this->invxmlArticles .= '<row>
                                     <ItemCode>' . $this->sapArticle[0]['itemcode'] . '</ItemCode>
@@ -1060,7 +1145,7 @@ class UserController extends BaseController
             $pdf->logo('it');
             $pdf->addSociete("Sede Legale", $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . $this->userMoodle['0']['fattcomune'] . " " . $this->userMoodle['0']['fattprov'] . "\nITALY");
             
-            $pdf->fact_dev("Fattura di Vendita N�:", $this->datiInvoice['docnum'] . " ");
+            $pdf->fact_dev("Fattura di Vendita N°:", $this->datiInvoice['docnum'] . " ");
             
             $pdf->addShip("\nData emissione " . $this->datiInvoice['data2'] . "\n\nSpett.le\n" . strtoupper($this->userMoodle['0']['Rag']) . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . $this->userMoodle['0']['fattcomune'] . " " . $this->userMoodle['0']['fattprov'] . "\nITALY");
             
@@ -1168,7 +1253,7 @@ class UserController extends BaseController
                 return FALSE;
             }
             
-            // invio la fattura di cortesia solo se l email personale � valorizzata
+            // invio la fattura di cortesia solo se l email personale è valorizzata
             if (! empty($this->userMoodle['0']['email'])) {
                 $mail = new send();
                 $array = [
@@ -1240,12 +1325,101 @@ class UserController extends BaseController
         $log = new MoodleModel('mdlapps_moodleadmin');
         $log->traceLog($this->arrQueryStringParams, $this->nome_log);
     }
-    // Qui incolla tutti gli altri metodi che erano presenti nel file originale:
-    // - incasso()
-    // - invoicePdf()
-    // - emailMessagge()
-       
-    // - getSeries()
-    // - listAction()
-    // Ti consiglio di copiarli dalla versione originale del file per essere sicuro di non perderne nessuno.
+
+    // File: Controller/Api/UserController.php (Aggiungere all'interno della classe UserController)
+    
+    /**
+     * Sanitizza le stringhe per rimuovere accenti, apostrofi e simboli problematici
+     * prima dell'inserimento in DB/XML.
+     */
+    private function _sanitizeForDatabase($string) {
+        if (!is_string($string) || empty($string)) { return $string; }
+        
+        $string = html_entity_decode($string, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        
+        $search = [
+            'à', 'è', 'é', 'ì', 'ò', 'ù', 'À', 'È', 'É', 'Ì', 'Ò', 'Ù',
+            'á', 'Á', 'í', 'Í', 'ó', 'Ó', 'ú', 'Ú', 'ñ', 'Ñ',
+            "'", '’', '‘', '`', '"', '“', '”', '´',
+            '–', '—', '-'
+        ];
+        $replace = [
+            'a', 'e', 'e', 'i', 'o', 'u', 'A', 'E', 'E', 'I', 'O', 'U',
+            'a', 'A', 'i', 'I', 'o', 'O', 'u', 'U', 'n', 'N',
+            ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+            ' ', ' ', ' '
+        ];
+        
+        $string = str_replace($search, $replace, $string);
+        $string = preg_replace('/\s+/', ' ', $string);
+        
+        return trim($string);
+    }
+    
+    /**
+     * Helper: Normalizza i caratteri speciali UTF-8 in ASCII standard.
+     * Gestisce apostrofi curvi, spazi invisibili, trattini e simboli di Word/iOS.
+     */
+    /**
+     * Helper: Normalizzazione Totale per SAP
+     * 1. Apostrofi (Dritti e Curvi) -> Diventano SPAZI
+     * 2. Accenti (à, è, ì...) -> Diventano lettere base (a, e, i...)
+     */
+    private function sanitizeString($str) {
+        if (empty($str) || !is_string($str)) {
+            return '';
+        }
+        
+        // 1. Mappa di sostituzione (Caratteri "Sporchi" -> Caratteri "Puliti")
+        $replacements = [
+            // --- APOSTROFI -> SPAZIO ---
+            "'"            => " ", // Apostrofo standard ASCII
+            "\xe2\x80\x98" => " ", // ‘ (Left Single Quote)
+            "\xe2\x80\x99" => " ", // ’ (Right Single Quote - Tipico di D’Avolio)
+            "\xe2\x80\x9a" => " ", // ‚ (Single Low-9 Quote)
+            "\xe2\x80\x9b" => " ", // ‛ (Single High-Reversed-9 Quote)
+            
+            // --- RIMUZIONE ACCENTI (Minuscole) ---
+            "à" => "a", "á" => "a", "â" => "a", "ä" => "a", "å" => "a",
+            "è" => "e", "é" => "e", "ê" => "e", "ë" => "e",
+            "ì" => "i", "í" => "i", "î" => "i", "ï" => "i",
+            "ò" => "o", "ó" => "o", "ô" => "o", "ö" => "o",
+            "ù" => "u", "ú" => "u", "û" => "u", "ü" => "u",
+            "y" => "y", "ÿ" => "y", "ñ" => "n", "ç" => "c",
+            
+            // --- RIMUZIONE ACCENTI (Maiuscole - se arrivano così) ---
+            "À" => "A", "Á" => "A", "Â" => "A", "Ä" => "A", "Å" => "A",
+            "È" => "E", "É" => "E", "Ê" => "E", "Ë" => "E",
+            "Ì" => "I", "Í" => "I", "Î" => "I", "Ï" => "I",
+            "Ò" => "O", "Ó" => "O", "Ô" => "O", "Ö" => "O",
+            "Ù" => "U", "Ú" => "U", "Û" => "U", "Ü" => "U",
+            "Ñ" => "N", "Ç" => "C",
+            
+            // --- ALTRI SIMBOLI DA PULIRE ---
+            "\xe2\x80\x9c" => "",  // “ (Doppie virgolette - Rimosse)
+            "\xe2\x80\x9d" => "",  // ” (Doppie virgolette - Rimosse)
+            '"'            => "",  // Doppio apice standard - Rimosso
+            "\xe2\x80\x93" => "-", // Trattino medio -> Trattino normale
+            "\xc2\xa0"     => " ", // Spazio non divisibile -> Spazio normale
+        ];
+        
+        // Esegue la sostituzione massiva
+        $str = strtr($str, $replacements);
+        
+        // 2. Decodifica HTML (Es: &egrave; diventa è -> poi gestito se rimasto, ma meglio pulire prima)
+        // Nota: Se strtr ha lavorato bene, qui non dovrebbero esserci più accenti,
+        // ma lo lasciamo per sicurezza su entità numeriche.
+        $str = html_entity_decode($str, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        
+        // 3. Rimuove eventuali caratteri non ASCII rimasti (brutale ma efficace per SAP)
+        // Mantiene solo lettere, numeri, spazi e punteggiatura base
+        // $str = preg_replace('/[^a-zA-Z0-9\s\-\.]/', '', $str); // Scommenta se vuoi essere drastico
+        
+        // 4. Gestione Spazi Multipli
+        // Se "D'Avolio" diventa "D Avolio", va bene.
+        // Ma "L' Albero" diventerebbe "L  Albero" (due spazi). Questo lo corregge:
+        $str = preg_replace('/\s+/', ' ', $str);
+        
+        return trim($str);
+    }
 }

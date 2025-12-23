@@ -1,0 +1,28 @@
+
+[2025-12-23 Tue 21:40:56] : **************
+
+[2025-12-23 Tue 21:40:56] : {PARSE URL} : array (
+  0 => '',
+  1 => 'index.php',
+  2 => 'sap',
+  3 => 'ins',
+)
+[2025-12-23 Tue 21:40:56] : {VARDUMP} : array (
+  'id' => '75',
+)
+[2025-12-23 Tue 21:40:56] : Recupero record da moodle_payments per ID: 75
+[2025-12-23 Tue 21:40:56] : SQL: select * from moodle_payments where id=75
+ > entro in italia
+method: UserController::insInvoice
+[2025-12-23 Tue 21:40:56] : Recupero record da moodle_payments per ID: 75
+[2025-12-23 Tue 21:40:56] : SQL: select * from moodle_payments where id=75
+[2025-12-23 Tue 21:40:56] : {VARDUMP} : array (
+  'id' => 75,
+  'payment_id' => 7187,
+  'mdl' => 'mdl_professionefarmacia',
+  'courseid' => 47,
+  'userid' => 553,
+  'cost' => '170.00',
+  'tipo' => 'woocommerce',
+)
+[2025-12-23 Tue 21:40:56] : Errore critico durante la comunicazione con WooCommerce: Configurazione WooCommerce non trovata per l'istanza: mdl_professionefarmacia

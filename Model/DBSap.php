@@ -1,6 +1,8 @@
 <?php
 require_once PROJECT_ROOT_PATH . "/inc/config.php";
 require_once PROJECT_ROOT_PATH . "phplogger.php";
+
+#[\AllowDynamicProperties]
 class dbsap
 {
     protected $connection = null;
@@ -15,15 +17,16 @@ class dbsap
         $this->host = "192.168.10.44";
         $this->port = "1433";
         try {            
+            // MODIFICA PHP 8.2: Driver sqlsrv
+            // Sintassi: Server=IP,PORTA;Database=NOME
+            // $dsn = "sqlsrv:Server=" . $this->host . "," . $this->port . ";Database=" . $this->db . ";TrustServerCertificate=true;Encrypt=false";
+            $dsn = "sqlsrv:Server=" . $this->host . "," . $this->port . ";Database=" . $this->db;
             
-            $this->connection = new PDO("sqlsrv:Server=192.168.10.44;Database=".$this->db, "sa", "Wie@q&OxfePH", array(
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            $this->connection = new PDO($dsn, $this->username, $this->password, array(
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC // Consigliato aggiungerlo sempre
             ));
             
-            /*
-            $this->connection = new PDO("dblib:host=$this->host:$this->port;dbname=$this->db", "$this->username", "$this->password", array(
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
-            */
         } catch (Exception $e) {
             throw new Exception($e->getMessage());
         }

@@ -31,7 +31,7 @@ define('EURO_VAL', 6.55957 );
 //  function addCadreEurosFrancs()
 //  function addTVAs( $params, $tab_tva, $invoice )
 //  function temporaire( $texte )
-
+#[\AllowDynamicProperties]
 class PDF_Invoice extends FPDF
 {
 // private variables

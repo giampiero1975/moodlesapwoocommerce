@@ -1,0 +1,506 @@
+
+[2025-12-19 Fri 11:10:46] : **************
+
+[2025-12-19 Fri 11:10:46] : {PARSE URL} : array (
+  0 => '',
+  1 => 'index.php',
+  2 => 'sap',
+  3 => 'ins',
+)
+[2025-12-19 Fri 11:10:46] : {VARDUMP} : array (
+  'id' => '99',
+)
+[2025-12-19 Fri 11:10:46] : Recupero record da moodle_payments per ID: 99
+[2025-12-19 Fri 11:10:46] : SQL: select * from moodle_payments where id=99
+ > entro in italia
+method: UserController::insInvoice
+[2025-12-19 Fri 11:10:46] : Recupero record da moodle_payments per ID: 99
+[2025-12-19 Fri 11:10:46] : SQL: select * from moodle_payments where id=99
+[2025-12-19 Fri 11:10:46] : {VARDUMP} : array (
+  'id' => 99,
+  'payment_id' => 9218,
+  'mdl' => 'mdl_formazioneoss',
+  'courseid' => 29,
+  'userid' => 564,
+  'cost' => '5.00',
+  'tipo' => 'manual',
+)
+[2025-12-19 Fri 11:10:49] : Dati mappati da WooCommerce:
+[2025-12-19 Fri 11:10:49] : {VARDUMP} : array (
+  0 => 
+  array (
+    'nome' => 'Gabriella Mazzotti',
+    'email' => 'stellaraf@live.it',
+    'Rag' => 'Gabriella Mazzotti',
+    'CF' => 'MZZGRL86H51G975D',
+    'partitaiva' => '',
+    'fattind' => 'Via c.cattaneo',
+    'fattcomune' => 'Tortora marina',
+    'fattcap' => '87020',
+    'fattprov' => 'CS',
+    'telefono' => '3459660719',
+    'PEC' => '',
+    'IPACodePA' => '',
+  ),
+  1 => 
+  array (
+    'cost' => '5.00',
+    'fullname' => 'Emergenze Respiratorie',
+    'idnumber' => 'MEcdOSS',
+    'datapagamento' => '2025-11-30',
+  ),
+)
+[2025-12-19 Fri 11:10:49] : Recupero dati utenti da SAP
+[2025-12-19 Fri 11:10:49] : getSapUser: Cerco utente con CF: MZZGRL86H51G975D
+[2025-12-19 Fri 11:10:49] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'MZZGRL86H51G975D' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-19 Fri 11:10:50] : utente non presente in SAP
+[2025-12-19 Fri 11:10:50] : Cliente Gabriella Mazzotti {MZZGRL86H51G975D} non presente su SAP. Tentativo di creazione.
+[2025-12-19 Fri 11:10:50] : SELECT (max(SUBSTRING ( cardcode ,3 , len(cardcode) ))+1) as 'maxCardCode' FROM OCRD WHERE cardcode LIKE 'CM%';
+[2025-12-19 Fri 11:10:50] : nuovo CardCode generato: CM003827
+[2025-12-19 Fri 11:10:50] : Generazione XML per nuovo BP
+[2025-12-19 Fri 11:10:50] : XML Business Partner
+[2025-12-19 Fri 11:10:50] : <BusinessPartner><RequestInfo>
+                                    <requestUser>manager</requestUser>
+                                    <requestDataTime>2025-12-19 11:12:50</requestDataTime>
+                                    <requestDB>METMI_TEST</requestDB>
+                                </RequestInfo><Data>
+                                <codice>CM003827</codice>
+                                <ragsoc>Gabriella Mazzotti</ragsoc>
+                                <conto>14001010</conto>
+                                <tiposoll></tiposoll>
+                                <tipoimp></tipoimp>
+                                <codiva></codiva>
+                                <cat>104</cat>
+                                <zona></zona>
+                                <valuta>EUR</valuta>
+                                <codage>-1</codage>
+                                <piva></piva>
+                                <codfis>MZZGRL86H51G975D</codfis>
+                                <singlepay>N</singlepay>
+                                <tel1>3459660719</tel1>
+                                <tel2></tel2>
+                                <fax></fax>
+                                <email>stellaraf@live.it</email>
+                                <web></web>
+                                <lingua>13</lingua>
+                                <tipobp>CBI</tipobp>
+                                <bloccopag>N</bloccopag>
+                                <numlettes></numlettes>
+                                <impes></impes>
+                                <dtiniese></dtiniese>
+                                <dtfinese></dtfinese>
+                                <impfido></impfido>
+                                <annullato>N</annullato>
+                                <noteana></noteana>
+                                <abiint>08374</abiint>
+                                <nazint>IT</nazint>
+                                <cabint>32480</cabint>
+                                <ccint>000000113266</ccint>
+                                <codpag></codpag>
+                                <sapproperty></sapproperty>
+                                <intra>N</intra>
+                                <tipoes>I</tipoes>
+                                <indirpec></indirpec>
+                                <coddestsdi>0000000</coddestsdi>
+                                <CheckPA>N</CheckPA>
+                                <codop347></codop347>
+                                <opassic347>N</opassic347>
+                                <ritacc>N</ritacc>
+                                <Conguaglio>N</Conguaglio>
+                            	<settore>-1</settore>
+                                <userfield></userfield>
+                                <indirizzi>
+                                  <indirizzo>
+                                    <tipoind>B</tipoind>
+                                    <idind>Gabriella Mazzotti</idind>
+                                    <viaind>Via c.cattaneo</viaind>
+                                    <capind>87020</capind>
+                                    <locind>Tortora marina</locind>
+                                    <statind>IT</statind>
+                                    <provind>CS</provind>
+                                    <pivaind></pivaind>
+                                  </indirizzo>
+                                  <indirizzo>
+                                    <tipoind>S</tipoind>
+                                    <idind>Gabriella Mazzotti</idind>
+                                    <viaind>Via c.cattaneo</viaind>
+                                    <capind>87020</capind>
+                                    <locind>Tortora marina</locind>
+                                    <statind>IT</statind>
+                                    <provind>CS</provind>
+                                    <pivaind></pivaind>
+                                  </indirizzo>
+                                </indirizzi>
+                        </Data></BusinessPartner>
+[2025-12-19 Fri 11:10:50] : <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
+                                <soapenv:Header/>
+                                    <soapenv:Body>
+                                    <loc:BOsync>
+                                    <loc:reqType>set</loc:reqType>
+                                    <loc:objType></loc:objType>
+                                    <loc:docXml>&lt;BusinessPartner&gt;&lt;RequestInfo&gt;
+                                    &lt;requestUser&gt;manager&lt;/requestUser&gt;
+                                    &lt;requestDataTime&gt;2025-12-19 11:12:50&lt;/requestDataTime&gt;
+                                    &lt;requestDB&gt;METMI_TEST&lt;/requestDB&gt;
+                                &lt;/RequestInfo&gt;&lt;Data&gt;
+                                &lt;codice&gt;CM003827&lt;/codice&gt;
+                                &lt;ragsoc&gt;Gabriella Mazzotti&lt;/ragsoc&gt;
+                                &lt;conto&gt;14001010&lt;/conto&gt;
+                                &lt;tiposoll&gt;&lt;/tiposoll&gt;
+                                &lt;tipoimp&gt;&lt;/tipoimp&gt;
+                                &lt;codiva&gt;&lt;/codiva&gt;
+                                &lt;cat&gt;104&lt;/cat&gt;
+                                &lt;zona&gt;&lt;/zona&gt;
+                                &lt;valuta&gt;EUR&lt;/valuta&gt;
+                                &lt;codage&gt;-1&lt;/codage&gt;
+                                &lt;piva&gt;&lt;/piva&gt;
+                                &lt;codfis&gt;MZZGRL86H51G975D&lt;/codfis&gt;
+                                &lt;singlepay&gt;N&lt;/singlepay&gt;
+                                &lt;tel1&gt;3459660719&lt;/tel1&gt;
+                                &lt;tel2&gt;&lt;/tel2&gt;
+                                &lt;fax&gt;&lt;/fax&gt;
+                                &lt;email&gt;stellaraf@live.it&lt;/email&gt;
+                                &lt;web&gt;&lt;/web&gt;
+                                &lt;lingua&gt;13&lt;/lingua&gt;
+                                &lt;tipobp&gt;CBI&lt;/tipobp&gt;
+                                &lt;bloccopag&gt;N&lt;/bloccopag&gt;
+                                &lt;numlettes&gt;&lt;/numlettes&gt;
+                                &lt;impes&gt;&lt;/impes&gt;
+                                &lt;dtiniese&gt;&lt;/dtiniese&gt;
+                                &lt;dtfinese&gt;&lt;/dtfinese&gt;
+                                &lt;impfido&gt;&lt;/impfido&gt;
+                                &lt;annullato&gt;N&lt;/annullato&gt;
+                                &lt;noteana&gt;&lt;/noteana&gt;
+                                &lt;abiint&gt;08374&lt;/abiint&gt;
+                                &lt;nazint&gt;IT&lt;/nazint&gt;
+                                &lt;cabint&gt;32480&lt;/cabint&gt;
+                                &lt;ccint&gt;000000113266&lt;/ccint&gt;
+                                &lt;codpag&gt;&lt;/codpag&gt;
+                                &lt;sapproperty&gt;&lt;/sapproperty&gt;
+                                &lt;intra&gt;N&lt;/intra&gt;
+                                &lt;tipoes&gt;I&lt;/tipoes&gt;
+                                &lt;indirpec&gt;&lt;/indirpec&gt;
+                                &lt;coddestsdi&gt;0000000&lt;/coddestsdi&gt;
+                                &lt;CheckPA&gt;N&lt;/CheckPA&gt;
+                                &lt;codop347&gt;&lt;/codop347&gt;
+                                &lt;opassic347&gt;N&lt;/opassic347&gt;
+                                &lt;ritacc&gt;N&lt;/ritacc&gt;
+                                &lt;Conguaglio&gt;N&lt;/Conguaglio&gt;
+                            	&lt;settore&gt;-1&lt;/settore&gt;
+                                &lt;userfield&gt;&lt;/userfield&gt;
+                                &lt;indirizzi&gt;
+                                  &lt;indirizzo&gt;
+                                    &lt;tipoind&gt;B&lt;/tipoind&gt;
+                                    &lt;idind&gt;Gabriella Mazzotti&lt;/idind&gt;
+                                    &lt;viaind&gt;Via c.cattaneo&lt;/viaind&gt;
+                                    &lt;capind&gt;87020&lt;/capind&gt;
+                                    &lt;locind&gt;Tortora marina&lt;/locind&gt;
+                                    &lt;statind&gt;IT&lt;/statind&gt;
+                                    &lt;provind&gt;CS&lt;/provind&gt;
+                                    &lt;pivaind&gt;&lt;/pivaind&gt;
+                                  &lt;/indirizzo&gt;
+                                  &lt;indirizzo&gt;
+                                    &lt;tipoind&gt;S&lt;/tipoind&gt;
+                                    &lt;idind&gt;Gabriella Mazzotti&lt;/idind&gt;
+                                    &lt;viaind&gt;Via c.cattaneo&lt;/viaind&gt;
+                                    &lt;capind&gt;87020&lt;/capind&gt;
+                                    &lt;locind&gt;Tortora marina&lt;/locind&gt;
+                                    &lt;statind&gt;IT&lt;/statind&gt;
+                                    &lt;provind&gt;CS&lt;/provind&gt;
+                                    &lt;pivaind&gt;&lt;/pivaind&gt;
+                                  &lt;/indirizzo&gt;
+                                &lt;/indirizzi&gt;
+                        &lt;/Data&gt;&lt;/BusinessPartner&gt;</loc:docXml>
+                              </loc:BOsync>
+                              </soapenv:Body>
+                              </soapenv:Envelope>
+[2025-12-19 Fri 11:10:50] : getSapUser: XML per nuovo utente creato. Tento invio a SAP (sendWS)...
+[2025-12-19 Fri 11:10:50] : invio xml: bp
+[2025-12-19 Fri 11:11:01] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:10:52.62 </ResponseData><ResponseId>258789762</ResponseId><ResponseAction>Add</ResponseAction><ResponseQuery /><DebugPoint /><SessionId>5E791179-8931-47EF-BF37-CF749F230650</SessionId></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Cliente CM003827 aggiunto con successo</Message><ReturnKey>CM003827</ReturnKey></Esito></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:11:01] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:10:52.62 </ResponseData><ResponseId>258789762</ResponseId><ResponseAction>Add</ResponseAction><ResponseQuery /><DebugPoint /><SessionId>5E791179-8931-47EF-BF37-CF749F230650</SessionId></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Cliente CM003827 aggiunto con successo</Message><ReturnKey>CM003827</ReturnKey></Esito></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Cliente CM003827 aggiunto con successo',
+  )),
+)
+[2025-12-19 Fri 11:11:01] : Tipo: bp
+[2025-12-19 Fri 11:11:01] : Business Partner inserito con successo: CM003827
+[2025-12-19 Fri 11:11:01] : getSapUser: Utente creato con successo su SAP. Recupero i dati aggiornati.
+[2025-12-19 Fri 11:11:01] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'MZZGRL86H51G975D' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'cardcode' => 'CM003827',
+    'cardname' => 'Gabriella Mazzotti',
+    'AddId' => 'MZZGRL86H51G975D',
+    'partitaiva' => '',
+    'IPACodePA' => '0000000',
+    'E_Mail' => 'stellaraf@live.it',
+    'PECAddr' => NULL,
+    'ShipToDef' => 'Gabriella Mazzotti',
+    'BillToDef' => 'Gabriella Mazzotti',
+    'pymcode' => 'Cl.Bon.Bancario',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : *** GET indirizzo fatturazione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003827' AND AdresType='B';
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Gabriella Mazzotti',
+    'Street' => 'Via c.cattaneo',
+    'ZipCode' => '87020',
+    'City' => 'Tortora marina',
+    'State' => 'CS',
+    'AdresType' => 'B',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : *** GET indirizzo spedizione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003827' AND AdresType='S';
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Gabriella Mazzotti',
+    'Street' => 'Via c.cattaneo',
+    'ZipCode' => '87020',
+    'City' => 'Tortora marina',
+    'State' => 'CS',
+    'AdresType' => 'S',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  'cardcode' => 'CM003827',
+  'cardname' => 'Gabriella Mazzotti',
+  'AddId' => 'MZZGRL86H51G975D',
+  'partitaiva' => '',
+  'E_Mail' => 'stellaraf@live.it',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Gabriella Mazzotti',
+  'BillToDef' => 'Gabriella Mazzotti',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Gabriella Mazzotti',
+  'Address' => 'Via c.cattaneo',
+  'City' => 'Tortora marina',
+  'ZipCode' => '87020',
+  'Prov' => 'CS',
+  'NameAddressS' => 'Gabriella Mazzotti',
+  'MailAddres' => 'Via c.cattaneo',
+  'MailCity' => 'Tortora marina',
+  'MailZipCod' => '87020',
+  'MailProv' => 'CS',
+)
+[2025-12-19 Fri 11:11:01] : getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  'cardcode' => 'CM003827',
+  'cardname' => 'Gabriella Mazzotti',
+  'AddId' => 'MZZGRL86H51G975D',
+  'partitaiva' => '',
+  'E_Mail' => 'stellaraf@live.it',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Gabriella Mazzotti',
+  'BillToDef' => 'Gabriella Mazzotti',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Gabriella Mazzotti',
+  'Address' => 'Via c.cattaneo',
+  'City' => 'Tortora marina',
+  'ZipCode' => '87020',
+  'Prov' => 'CS',
+  'NameAddressS' => 'Gabriella Mazzotti',
+  'MailAddres' => 'Via c.cattaneo',
+  'MailCity' => 'Tortora marina',
+  'MailZipCod' => '87020',
+  'MailProv' => 'CS',
+)
+[2025-12-19 Fri 11:11:01] : *** Utente esiste, verifico allineamento dati
+[2025-12-19 Fri 11:11:01] : *** Verifica allineamento dati fatturazione
+[2025-12-19 Fri 11:11:01] : {IPACodePA} Moodle valido
+[2025-12-19 Fri 11:11:01] : {Address} disallineata
+[2025-12-19 Fri 11:11:01] : *** Verifica allineamento dati spedizione
+[2025-12-19 Fri 11:11:01] : Dump array allineamento
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  'B' => 
+  array (
+    'Address' => 'Gabriella Mazzotti',
+  ),
+  'S' => 
+  array (
+    'Address' => 'Gabriella Mazzotti',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : update CRD1 set Address = 'Gabriella Mazzotti' where cardcode='CM003827' and AdresType='B';
+[2025-12-19 Fri 11:11:01] : update CRD1 set Address = 'Gabriella Mazzotti' where cardcode='CM003827' and AdresType='S';
+[2025-12-19 Fri 11:11:01] : *** Allineamento effettuato con successo, riprendo i dati aggiornati
+[2025-12-19 Fri 11:11:01] : Recupero dati utenti da SAP
+[2025-12-19 Fri 11:11:01] : getSapUser: Cerco utente con CF: MZZGRL86H51G975D
+[2025-12-19 Fri 11:11:01] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'MZZGRL86H51G975D' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'cardcode' => 'CM003827',
+    'cardname' => 'Gabriella Mazzotti',
+    'AddId' => 'MZZGRL86H51G975D',
+    'partitaiva' => '',
+    'IPACodePA' => '0000000',
+    'E_Mail' => 'stellaraf@live.it',
+    'PECAddr' => NULL,
+    'ShipToDef' => 'Gabriella Mazzotti',
+    'BillToDef' => 'Gabriella Mazzotti',
+    'pymcode' => 'Cl.Bon.Bancario',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : *** GET indirizzo fatturazione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003827' AND AdresType='B';
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Gabriella Mazzotti',
+    'Street' => 'Via c.cattaneo',
+    'ZipCode' => '87020',
+    'City' => 'Tortora marina',
+    'State' => 'CS',
+    'AdresType' => 'B',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : *** GET indirizzo spedizione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003827' AND AdresType='S';
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Gabriella Mazzotti',
+    'Street' => 'Via c.cattaneo',
+    'ZipCode' => '87020',
+    'City' => 'Tortora marina',
+    'State' => 'CS',
+    'AdresType' => 'S',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  'cardcode' => 'CM003827',
+  'cardname' => 'Gabriella Mazzotti',
+  'AddId' => 'MZZGRL86H51G975D',
+  'partitaiva' => '',
+  'E_Mail' => 'stellaraf@live.it',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Gabriella Mazzotti',
+  'BillToDef' => 'Gabriella Mazzotti',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Gabriella Mazzotti',
+  'Address' => 'Via c.cattaneo',
+  'City' => 'Tortora marina',
+  'ZipCode' => '87020',
+  'Prov' => 'CS',
+  'NameAddressS' => 'Gabriella Mazzotti',
+  'MailAddres' => 'Via c.cattaneo',
+  'MailCity' => 'Tortora marina',
+  'MailZipCod' => '87020',
+  'MailProv' => 'CS',
+)
+[2025-12-19 Fri 11:11:01] : getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  'cardcode' => 'CM003827',
+  'cardname' => 'Gabriella Mazzotti',
+  'AddId' => 'MZZGRL86H51G975D',
+  'partitaiva' => '',
+  'E_Mail' => 'stellaraf@live.it',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Gabriella Mazzotti',
+  'BillToDef' => 'Gabriella Mazzotti',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Gabriella Mazzotti',
+  'Address' => 'Via c.cattaneo',
+  'City' => 'Tortora marina',
+  'ZipCode' => '87020',
+  'Prov' => 'CS',
+  'NameAddressS' => 'Gabriella Mazzotti',
+  'MailAddres' => 'Via c.cattaneo',
+  'MailCity' => 'Tortora marina',
+  'MailZipCod' => '87020',
+  'MailProv' => 'CS',
+)
+[2025-12-19 Fri 11:11:01] : Recupero articolo SAP con idnumber: MEcdOSS
+[2025-12-19 Fri 11:11:01] : SELECT trim(OITM.itemcode) as itemcode, OITM.itemname, OITM.vatgourpSa, OITW.RevenuesAc   FROM OITM JOIN OITW ON OITM.ItemCode = OITW.ItemCode WHERE OITW.itemcode ='MEcdOSS';
+[2025-12-19 Fri 11:11:01] : Dump array articoloSap
+[2025-12-19 Fri 11:11:01] : {VARDUMP} : array (
+  0 => 
+  array (
+    'itemcode' => 'MEcdOSS',
+    'itemname' => 'Corso ECM Formazione OSS',
+    'vatgourpSa' => 'Ves10n20',
+    'RevenuesAc' => '47005010',
+  ),
+)
+[2025-12-19 Fri 11:11:01] : FASE: Articolo SAP recuperato con successo.
+[2025-12-19 Fri 11:11:01] : Numero serie per tipo [manual]
+[2025-12-19 Fri 11:11:01] : Nuovo documento di numerazione serie : FCLBON25
+[2025-12-19 Fri 11:11:01] : SELECT Series from dbo.NNM1 where seriesName='FCLBON25'
+[2025-12-19 Fri 11:11:01] : Numero serie : 101
+[2025-12-19 Fri 11:11:01] : Nuovo documento di numerazione serie : 101
+[2025-12-19 Fri 11:11:01] : SELECT NextNumber from dbo.NNM1 where series=101
+[2025-12-19 Fri 11:11:01] : Numero documento : 2025300001
+[2025-12-19 Fri 11:11:01] : XML Invoice
+[2025-12-19 Fri 11:11:01] : <BOM>
+                                <BO><AdmInfo>
+                                <requestUser>manager</requestUser>
+                                <requestDataTime>2025-12-19 11:12:01</requestDataTime>
+                                <requestDB>METMI_TEST</requestDB>
+                                <Object>13</Object>
+                                <Version>2</Version>
+                            </AdmInfo><Documents>
+                                <row>
+                                    <Series>101</Series>
+                                    <DocNum>2025300001</DocNum>
+                                    <CardCode>CM003827</CardCode>
+                                    <ShipToCode>Gabriella Mazzotti</ShipToCode>
+                                    <DocDate>20251130</DocDate>
+                                    <TaxDate>20251130</TaxDate>
+                                    <DocCurrency>EUR</DocCurrency>
+                                    <PaymentMethod>Cl.Bon.Bancario</PaymentMethod>
+                                    <PaymentGroupCode>54</PaymentGroupCode>
+                                    <DocTotal>5.00</DocTotal>
+                                    <U_B1SYS_INV_TYPE>TD01</U_B1SYS_INV_TYPE>
+                                </row>
+                            </Documents><Document_Lines><row>
+                                    <ItemCode>MEcdOSS</ItemCode>
+				                    <ItemDescription>Corso ECM Formazione OSS - Gabriella Mazzotti</ItemDescription>
+				                    <Quantity>1</Quantity>
+				                    <LineTotal>5.00</LineTotal>
+				                    <VatGroup>Ves10n20</VatGroup>
+				                    <AccountCode>47005010</AccountCode>
+                                </row></Document_Lines><Document_Installments>
+                                <row>
+                                    <DueDate>20251130</DueDate>
+                                    <Total>5.00</Total>
+                                </row>
+                            </Document_Installments></BO>
+                                </BOM>
+[2025-12-19 Fri 11:11:01] : invio xml: invoice
+[2025-12-19 Fri 11:11:15] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:11:01.62 </ResponseData><ResponseId>1497892570</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>11414</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:11:15] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:11:01.62 </ResponseData><ResponseId>1497892570</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>11414</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:11:15] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Operazione avvenuta con successo',
+  )),
+)
+[2025-12-19 Fri 11:11:15] : Tipo: invoice
+[2025-12-19 Fri 11:11:15] : Fattura inserita con docEnty: 11414
+[2025-12-19 Fri 11:11:15] : Fattura inviata correttamente docEntry[11414]Error: 
+1. 
+3. SQLSTATE[42S02]: Base table or view not found: 1146 Table 'paypal.invoice' doesn't exist

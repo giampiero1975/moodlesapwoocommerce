@@ -4,8 +4,9 @@ date_default_timezone_set('Europe/Rome');
 try {
     $moodle = new dbmoodle('mdlapps_moodleadmin');
     // verifico che siamo presenti pagamenti non elaborati(sales='0') che non siano stati inseriti più di 30 minuti fà per inviarlo una sola volta
-    $enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and TIMESTAMPDIFF(MINUTE,data_ins,NOW()) <=30;");
-    #$enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE id=2692;");
+    $enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and `logfile` IS null;");
+    //$enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and TIMESTAMPDIFF(MINUTE,data_ins,NOW()) <=30;");
+    //$enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0';");
 
     # echo "<pre>";
     if (empty($enrol_paypal)) {
@@ -17,16 +18,8 @@ try {
     #die();
     $url=null;
     foreach ($enrol_paypal as $keyEnrol) {
-        #$url = "http://moodlesap.test/index.php/sap/ins?"; # url di svi
-        $url = "http://moodlesap.metmi.lan/index.php/sap/ins?"; # url di ese
+        $url = "http://moodlesapwoocommerce.metmi.lan/index.php/sap/ins?"; # url di ese
         $url .= "id=" . $keyEnrol['id'];
-        /*
-        $url .= "mdl=" . $keyEnrol['mdl'] 
-             . "&courseid=" . $keyEnrol['courseid'] 
-             . "&userid=" . $keyEnrol['userid'] 
-             . "&tipo=". $keyEnrol['method']
-             . "&payment_id=". $keyEnrol['payment_id'];
-        */
         #echo "<br>".$url;
         
         // step1

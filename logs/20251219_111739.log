@@ -1,0 +1,612 @@
+
+[2025-12-19 Fri 11:17:39] : **************
+
+[2025-12-19 Fri 11:17:39] : {PARSE URL} : array (
+  0 => '',
+  1 => 'index.php',
+  2 => 'sap',
+  3 => 'ins',
+)
+[2025-12-19 Fri 11:17:39] : {VARDUMP} : array (
+  'id' => '81',
+)
+[2025-12-19 Fri 11:17:39] : Recupero record da moodle_payments per ID: 81
+[2025-12-19 Fri 11:17:39] : SQL: select * from moodle_payments where id=81
+ > entro in italia
+method: UserController::insInvoice
+[2025-12-19 Fri 11:17:39] : Recupero record da moodle_payments per ID: 81
+[2025-12-19 Fri 11:17:39] : SQL: select * from moodle_payments where id=81
+[2025-12-19 Fri 11:17:39] : {VARDUMP} : array (
+  'id' => 81,
+  'payment_id' => 9755,
+  'mdl' => 'mdl_formazioneoss',
+  'courseid' => 30,
+  'userid' => 1435,
+  'cost' => '5.00',
+  'tipo' => 'woocommerce',
+)
+[2025-12-19 Fri 11:17:42] : Dati mappati da WooCommerce:
+[2025-12-19 Fri 11:17:42] : {VARDUMP} : array (
+  0 => 
+  array (
+    'nome' => 'Loredana Carbone',
+    'email' => 'loredanacarbone3@gmail.com',
+    'Rag' => 'Loredana Carbone',
+    'CF' => 'CRBLDN76M48E882X',
+    'partitaiva' => '',
+    'fattind' => 'VIA GIUSEPPE MAZZINI 36',
+    'fattcomune' => 'TORRE SANTA SUSANNA',
+    'fattcap' => '72028',
+    'fattprov' => 'BR',
+    'telefono' => '3807590581',
+    'PEC' => '',
+    'IPACodePA' => '',
+  ),
+  1 => 
+  array (
+    'cost' => '5.00',
+    'fullname' => 'Il piede diabetico',
+    'idnumber' => 'MEcdOSS',
+    'datapagamento' => '2025-12-18T12:23:34',
+  ),
+)
+[2025-12-19 Fri 11:17:42] : Recupero dati utenti da SAP
+[2025-12-19 Fri 11:17:42] : getSapUser: Cerco utente con CF: CRBLDN76M48E882X
+[2025-12-19 Fri 11:17:42] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'CRBLDN76M48E882X' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-19 Fri 11:17:43] : utente non presente in SAP
+[2025-12-19 Fri 11:17:43] : Cliente Loredana Carbone {CRBLDN76M48E882X} non presente su SAP. Tentativo di creazione.
+[2025-12-19 Fri 11:17:43] : SELECT (max(SUBSTRING ( cardcode ,3 , len(cardcode) ))+1) as 'maxCardCode' FROM OCRD WHERE cardcode LIKE 'CM%';
+[2025-12-19 Fri 11:17:43] : nuovo CardCode generato: CM003828
+[2025-12-19 Fri 11:17:43] : Generazione XML per nuovo BP
+[2025-12-19 Fri 11:17:43] : XML Business Partner
+[2025-12-19 Fri 11:17:43] : <BusinessPartner><RequestInfo>
+                                    <requestUser>manager</requestUser>
+                                    <requestDataTime>2025-12-19 11:12:43</requestDataTime>
+                                    <requestDB>METMI_TEST</requestDB>
+                                </RequestInfo><Data>
+                                <codice>CM003828</codice>
+                                <ragsoc>Loredana Carbone</ragsoc>
+                                <conto>14001010</conto>
+                                <tiposoll></tiposoll>
+                                <tipoimp></tipoimp>
+                                <codiva></codiva>
+                                <cat>104</cat>
+                                <zona></zona>
+                                <valuta>EUR</valuta>
+                                <codage>-1</codage>
+                                <piva></piva>
+                                <codfis>CRBLDN76M48E882X</codfis>
+                                <singlepay>N</singlepay>
+                                <tel1>3807590581</tel1>
+                                <tel2></tel2>
+                                <fax></fax>
+                                <email>loredanacarbone3@gmail.com</email>
+                                <web></web>
+                                <lingua>13</lingua>
+                                <tipobp>CBI</tipobp>
+                                <bloccopag>N</bloccopag>
+                                <numlettes></numlettes>
+                                <impes></impes>
+                                <dtiniese></dtiniese>
+                                <dtfinese></dtfinese>
+                                <impfido></impfido>
+                                <annullato>N</annullato>
+                                <noteana></noteana>
+                                <abiint>08374</abiint>
+                                <nazint>IT</nazint>
+                                <cabint>32480</cabint>
+                                <ccint>000000113266</ccint>
+                                <codpag></codpag>
+                                <sapproperty></sapproperty>
+                                <intra>N</intra>
+                                <tipoes>I</tipoes>
+                                <indirpec></indirpec>
+                                <coddestsdi>0000000</coddestsdi>
+                                <CheckPA>N</CheckPA>
+                                <codop347></codop347>
+                                <opassic347>N</opassic347>
+                                <ritacc>N</ritacc>
+                                <Conguaglio>N</Conguaglio>
+                            	<settore>-1</settore>
+                                <userfield></userfield>
+                                <indirizzi>
+                                  <indirizzo>
+                                    <tipoind>B</tipoind>
+                                    <idind>Loredana Carbone</idind>
+                                    <viaind>VIA GIUSEPPE MAZZINI 36</viaind>
+                                    <capind>72028</capind>
+                                    <locind>TORRE SANTA SUSANNA</locind>
+                                    <statind>IT</statind>
+                                    <provind>BR</provind>
+                                    <pivaind></pivaind>
+                                  </indirizzo>
+                                  <indirizzo>
+                                    <tipoind>S</tipoind>
+                                    <idind>Loredana Carbone</idind>
+                                    <viaind>VIA GIUSEPPE MAZZINI 36</viaind>
+                                    <capind>72028</capind>
+                                    <locind>TORRE SANTA SUSANNA</locind>
+                                    <statind>IT</statind>
+                                    <provind>BR</provind>
+                                    <pivaind></pivaind>
+                                  </indirizzo>
+                                </indirizzi>
+                        </Data></BusinessPartner>
+[2025-12-19 Fri 11:17:43] : <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
+                                <soapenv:Header/>
+                                    <soapenv:Body>
+                                    <loc:BOsync>
+                                    <loc:reqType>set</loc:reqType>
+                                    <loc:objType></loc:objType>
+                                    <loc:docXml>&lt;BusinessPartner&gt;&lt;RequestInfo&gt;
+                                    &lt;requestUser&gt;manager&lt;/requestUser&gt;
+                                    &lt;requestDataTime&gt;2025-12-19 11:12:43&lt;/requestDataTime&gt;
+                                    &lt;requestDB&gt;METMI_TEST&lt;/requestDB&gt;
+                                &lt;/RequestInfo&gt;&lt;Data&gt;
+                                &lt;codice&gt;CM003828&lt;/codice&gt;
+                                &lt;ragsoc&gt;Loredana Carbone&lt;/ragsoc&gt;
+                                &lt;conto&gt;14001010&lt;/conto&gt;
+                                &lt;tiposoll&gt;&lt;/tiposoll&gt;
+                                &lt;tipoimp&gt;&lt;/tipoimp&gt;
+                                &lt;codiva&gt;&lt;/codiva&gt;
+                                &lt;cat&gt;104&lt;/cat&gt;
+                                &lt;zona&gt;&lt;/zona&gt;
+                                &lt;valuta&gt;EUR&lt;/valuta&gt;
+                                &lt;codage&gt;-1&lt;/codage&gt;
+                                &lt;piva&gt;&lt;/piva&gt;
+                                &lt;codfis&gt;CRBLDN76M48E882X&lt;/codfis&gt;
+                                &lt;singlepay&gt;N&lt;/singlepay&gt;
+                                &lt;tel1&gt;3807590581&lt;/tel1&gt;
+                                &lt;tel2&gt;&lt;/tel2&gt;
+                                &lt;fax&gt;&lt;/fax&gt;
+                                &lt;email&gt;loredanacarbone3@gmail.com&lt;/email&gt;
+                                &lt;web&gt;&lt;/web&gt;
+                                &lt;lingua&gt;13&lt;/lingua&gt;
+                                &lt;tipobp&gt;CBI&lt;/tipobp&gt;
+                                &lt;bloccopag&gt;N&lt;/bloccopag&gt;
+                                &lt;numlettes&gt;&lt;/numlettes&gt;
+                                &lt;impes&gt;&lt;/impes&gt;
+                                &lt;dtiniese&gt;&lt;/dtiniese&gt;
+                                &lt;dtfinese&gt;&lt;/dtfinese&gt;
+                                &lt;impfido&gt;&lt;/impfido&gt;
+                                &lt;annullato&gt;N&lt;/annullato&gt;
+                                &lt;noteana&gt;&lt;/noteana&gt;
+                                &lt;abiint&gt;08374&lt;/abiint&gt;
+                                &lt;nazint&gt;IT&lt;/nazint&gt;
+                                &lt;cabint&gt;32480&lt;/cabint&gt;
+                                &lt;ccint&gt;000000113266&lt;/ccint&gt;
+                                &lt;codpag&gt;&lt;/codpag&gt;
+                                &lt;sapproperty&gt;&lt;/sapproperty&gt;
+                                &lt;intra&gt;N&lt;/intra&gt;
+                                &lt;tipoes&gt;I&lt;/tipoes&gt;
+                                &lt;indirpec&gt;&lt;/indirpec&gt;
+                                &lt;coddestsdi&gt;0000000&lt;/coddestsdi&gt;
+                                &lt;CheckPA&gt;N&lt;/CheckPA&gt;
+                                &lt;codop347&gt;&lt;/codop347&gt;
+                                &lt;opassic347&gt;N&lt;/opassic347&gt;
+                                &lt;ritacc&gt;N&lt;/ritacc&gt;
+                                &lt;Conguaglio&gt;N&lt;/Conguaglio&gt;
+                            	&lt;settore&gt;-1&lt;/settore&gt;
+                                &lt;userfield&gt;&lt;/userfield&gt;
+                                &lt;indirizzi&gt;
+                                  &lt;indirizzo&gt;
+                                    &lt;tipoind&gt;B&lt;/tipoind&gt;
+                                    &lt;idind&gt;Loredana Carbone&lt;/idind&gt;
+                                    &lt;viaind&gt;VIA GIUSEPPE MAZZINI 36&lt;/viaind&gt;
+                                    &lt;capind&gt;72028&lt;/capind&gt;
+                                    &lt;locind&gt;TORRE SANTA SUSANNA&lt;/locind&gt;
+                                    &lt;statind&gt;IT&lt;/statind&gt;
+                                    &lt;provind&gt;BR&lt;/provind&gt;
+                                    &lt;pivaind&gt;&lt;/pivaind&gt;
+                                  &lt;/indirizzo&gt;
+                                  &lt;indirizzo&gt;
+                                    &lt;tipoind&gt;S&lt;/tipoind&gt;
+                                    &lt;idind&gt;Loredana Carbone&lt;/idind&gt;
+                                    &lt;viaind&gt;VIA GIUSEPPE MAZZINI 36&lt;/viaind&gt;
+                                    &lt;capind&gt;72028&lt;/capind&gt;
+                                    &lt;locind&gt;TORRE SANTA SUSANNA&lt;/locind&gt;
+                                    &lt;statind&gt;IT&lt;/statind&gt;
+                                    &lt;provind&gt;BR&lt;/provind&gt;
+                                    &lt;pivaind&gt;&lt;/pivaind&gt;
+                                  &lt;/indirizzo&gt;
+                                &lt;/indirizzi&gt;
+                        &lt;/Data&gt;&lt;/BusinessPartner&gt;</loc:docXml>
+                              </loc:BOsync>
+                              </soapenv:Body>
+                              </soapenv:Envelope>
+[2025-12-19 Fri 11:17:43] : getSapUser: XML per nuovo utente creato. Tento invio a SAP (sendWS)...
+[2025-12-19 Fri 11:17:43] : invio xml: bp
+[2025-12-19 Fri 11:17:43] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:17:43.37 </ResponseData><ResponseId>144925225</ResponseId><ResponseAction>Add</ResponseAction><ResponseQuery /><DebugPoint /><SessionId>B19083C8-92B3-499B-A634-E2D6A0833B2B</SessionId></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Cliente CM003828 aggiunto con successo</Message><ReturnKey>CM003828</ReturnKey></Esito></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:17:43] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:17:43.37 </ResponseData><ResponseId>144925225</ResponseId><ResponseAction>Add</ResponseAction><ResponseQuery /><DebugPoint /><SessionId>B19083C8-92B3-499B-A634-E2D6A0833B2B</SessionId></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Cliente CM003828 aggiunto con successo</Message><ReturnKey>CM003828</ReturnKey></Esito></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Cliente CM003828 aggiunto con successo',
+  )),
+)
+[2025-12-19 Fri 11:17:43] : Tipo: bp
+[2025-12-19 Fri 11:17:43] : Business Partner inserito con successo: CM003828
+[2025-12-19 Fri 11:17:43] : getSapUser: Utente creato con successo su SAP. Recupero i dati aggiornati.
+[2025-12-19 Fri 11:17:43] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'CRBLDN76M48E882X' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'cardcode' => 'CM003828',
+    'cardname' => 'Loredana Carbone',
+    'AddId' => 'CRBLDN76M48E882X',
+    'partitaiva' => '',
+    'IPACodePA' => '0000000',
+    'E_Mail' => 'loredanacarbone3@gmail.com',
+    'PECAddr' => NULL,
+    'ShipToDef' => 'Loredana Carbone',
+    'BillToDef' => 'Loredana Carbone',
+    'pymcode' => 'Cl.Bon.Bancario',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : *** GET indirizzo fatturazione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003828' AND AdresType='B';
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Loredana Carbone',
+    'Street' => 'VIA GIUSEPPE MAZZINI 36',
+    'ZipCode' => '72028',
+    'City' => 'TORRE SANTA SUSANNA',
+    'State' => 'BR',
+    'AdresType' => 'B',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : *** GET indirizzo spedizione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003828' AND AdresType='S';
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Loredana Carbone',
+    'Street' => 'VIA GIUSEPPE MAZZINI 36',
+    'ZipCode' => '72028',
+    'City' => 'TORRE SANTA SUSANNA',
+    'State' => 'BR',
+    'AdresType' => 'S',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  'cardcode' => 'CM003828',
+  'cardname' => 'Loredana Carbone',
+  'AddId' => 'CRBLDN76M48E882X',
+  'partitaiva' => '',
+  'E_Mail' => 'loredanacarbone3@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Loredana Carbone',
+  'BillToDef' => 'Loredana Carbone',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Loredana Carbone',
+  'Address' => 'VIA GIUSEPPE MAZZINI 36',
+  'City' => 'TORRE SANTA SUSANNA',
+  'ZipCode' => '72028',
+  'Prov' => 'BR',
+  'NameAddressS' => 'Loredana Carbone',
+  'MailAddres' => 'VIA GIUSEPPE MAZZINI 36',
+  'MailCity' => 'TORRE SANTA SUSANNA',
+  'MailZipCod' => '72028',
+  'MailProv' => 'BR',
+)
+[2025-12-19 Fri 11:17:43] : getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  'cardcode' => 'CM003828',
+  'cardname' => 'Loredana Carbone',
+  'AddId' => 'CRBLDN76M48E882X',
+  'partitaiva' => '',
+  'E_Mail' => 'loredanacarbone3@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Loredana Carbone',
+  'BillToDef' => 'Loredana Carbone',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Loredana Carbone',
+  'Address' => 'VIA GIUSEPPE MAZZINI 36',
+  'City' => 'TORRE SANTA SUSANNA',
+  'ZipCode' => '72028',
+  'Prov' => 'BR',
+  'NameAddressS' => 'Loredana Carbone',
+  'MailAddres' => 'VIA GIUSEPPE MAZZINI 36',
+  'MailCity' => 'TORRE SANTA SUSANNA',
+  'MailZipCod' => '72028',
+  'MailProv' => 'BR',
+)
+[2025-12-19 Fri 11:17:43] : *** Utente esiste, verifico allineamento dati
+[2025-12-19 Fri 11:17:43] : *** Verifica allineamento dati fatturazione
+[2025-12-19 Fri 11:17:43] : {IPACodePA} Moodle valido
+[2025-12-19 Fri 11:17:43] : {Address} disallineata
+[2025-12-19 Fri 11:17:43] : *** Verifica allineamento dati spedizione
+[2025-12-19 Fri 11:17:43] : Dump array allineamento
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  'B' => 
+  array (
+    'Address' => 'Loredana Carbone',
+  ),
+  'S' => 
+  array (
+    'Address' => 'Loredana Carbone',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : update CRD1 set Address = 'Loredana Carbone' where cardcode='CM003828' and AdresType='B';
+[2025-12-19 Fri 11:17:43] : update CRD1 set Address = 'Loredana Carbone' where cardcode='CM003828' and AdresType='S';
+[2025-12-19 Fri 11:17:43] : *** Allineamento effettuato con successo, riprendo i dati aggiornati
+[2025-12-19 Fri 11:17:43] : Recupero dati utenti da SAP
+[2025-12-19 Fri 11:17:43] : getSapUser: Cerco utente con CF: CRBLDN76M48E882X
+[2025-12-19 Fri 11:17:43] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'CRBLDN76M48E882X' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'cardcode' => 'CM003828',
+    'cardname' => 'Loredana Carbone',
+    'AddId' => 'CRBLDN76M48E882X',
+    'partitaiva' => '',
+    'IPACodePA' => '0000000',
+    'E_Mail' => 'loredanacarbone3@gmail.com',
+    'PECAddr' => NULL,
+    'ShipToDef' => 'Loredana Carbone',
+    'BillToDef' => 'Loredana Carbone',
+    'pymcode' => 'Cl.Bon.Bancario',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : *** GET indirizzo fatturazione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003828' AND AdresType='B';
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Loredana Carbone',
+    'Street' => 'VIA GIUSEPPE MAZZINI 36',
+    'ZipCode' => '72028',
+    'City' => 'TORRE SANTA SUSANNA',
+    'State' => 'BR',
+    'AdresType' => 'B',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : *** GET indirizzo spedizione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003828' AND AdresType='S';
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Loredana Carbone',
+    'Street' => 'VIA GIUSEPPE MAZZINI 36',
+    'ZipCode' => '72028',
+    'City' => 'TORRE SANTA SUSANNA',
+    'State' => 'BR',
+    'AdresType' => 'S',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  'cardcode' => 'CM003828',
+  'cardname' => 'Loredana Carbone',
+  'AddId' => 'CRBLDN76M48E882X',
+  'partitaiva' => '',
+  'E_Mail' => 'loredanacarbone3@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Loredana Carbone',
+  'BillToDef' => 'Loredana Carbone',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Loredana Carbone',
+  'Address' => 'VIA GIUSEPPE MAZZINI 36',
+  'City' => 'TORRE SANTA SUSANNA',
+  'ZipCode' => '72028',
+  'Prov' => 'BR',
+  'NameAddressS' => 'Loredana Carbone',
+  'MailAddres' => 'VIA GIUSEPPE MAZZINI 36',
+  'MailCity' => 'TORRE SANTA SUSANNA',
+  'MailZipCod' => '72028',
+  'MailProv' => 'BR',
+)
+[2025-12-19 Fri 11:17:43] : getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  'cardcode' => 'CM003828',
+  'cardname' => 'Loredana Carbone',
+  'AddId' => 'CRBLDN76M48E882X',
+  'partitaiva' => '',
+  'E_Mail' => 'loredanacarbone3@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Loredana Carbone',
+  'BillToDef' => 'Loredana Carbone',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Loredana Carbone',
+  'Address' => 'VIA GIUSEPPE MAZZINI 36',
+  'City' => 'TORRE SANTA SUSANNA',
+  'ZipCode' => '72028',
+  'Prov' => 'BR',
+  'NameAddressS' => 'Loredana Carbone',
+  'MailAddres' => 'VIA GIUSEPPE MAZZINI 36',
+  'MailCity' => 'TORRE SANTA SUSANNA',
+  'MailZipCod' => '72028',
+  'MailProv' => 'BR',
+)
+[2025-12-19 Fri 11:17:43] : Recupero articolo SAP con idnumber: MEcdOSS
+[2025-12-19 Fri 11:17:43] : SELECT trim(OITM.itemcode) as itemcode, OITM.itemname, OITM.vatgourpSa, OITW.RevenuesAc   FROM OITM JOIN OITW ON OITM.ItemCode = OITW.ItemCode WHERE OITW.itemcode ='MEcdOSS';
+[2025-12-19 Fri 11:17:43] : Dump array articoloSap
+[2025-12-19 Fri 11:17:43] : {VARDUMP} : array (
+  0 => 
+  array (
+    'itemcode' => 'MEcdOSS',
+    'itemname' => 'Corso ECM Formazione OSS',
+    'vatgourpSa' => 'Ves10n20',
+    'RevenuesAc' => '47005010',
+  ),
+)
+[2025-12-19 Fri 11:17:43] : FASE: Articolo SAP recuperato con successo.
+[2025-12-19 Fri 11:17:43] : Numero serie per tipo [woocommerce]
+[2025-12-19 Fri 11:17:43] : Nuovo documento di numerazione serie : FCLPAY25
+[2025-12-19 Fri 11:17:43] : SELECT Series from dbo.NNM1 where seriesName='FCLPAY25'
+[2025-12-19 Fri 11:17:43] : Numero serie : 102
+[2025-12-19 Fri 11:17:43] : Nuovo documento di numerazione serie : 102
+[2025-12-19 Fri 11:17:43] : SELECT NextNumber from dbo.NNM1 where series=102
+[2025-12-19 Fri 11:17:43] : Numero documento : 2025200017
+[2025-12-19 Fri 11:17:43] : XML Invoice
+[2025-12-19 Fri 11:17:43] : <BOM>
+                                <BO><AdmInfo>
+                                <requestUser>manager</requestUser>
+                                <requestDataTime>2025-12-19 11:12:43</requestDataTime>
+                                <requestDB>METMI_TEST</requestDB>
+                                <Object>13</Object>
+                                <Version>2</Version>
+                            </AdmInfo><Documents>
+                                <row>
+                                    <Series>102</Series>
+                                    <DocNum>2025200017</DocNum>
+                                    <CardCode>CM003828</CardCode>
+                                    <ShipToCode>Loredana Carbone</ShipToCode>
+                                    <DocDate>20251219</DocDate>
+                                    <TaxDate>20251219</TaxDate>
+                                    <DocCurrency>EUR</DocCurrency>
+                                    <PaymentMethod>Cl.Bon.Bancario</PaymentMethod>
+                                    <PaymentGroupCode>54</PaymentGroupCode>
+                                    <DocTotal>5.00</DocTotal>
+                                    <U_B1SYS_INV_TYPE>TD01</U_B1SYS_INV_TYPE>
+                                </row>
+                            </Documents><Document_Lines><row>
+                                    <ItemCode>MEcdOSS</ItemCode>
+				                    <ItemDescription>Corso ECM Formazione OSS - Loredana Carbone</ItemDescription>
+				                    <Quantity>1</Quantity>
+				                    <LineTotal>5.00</LineTotal>
+				                    <VatGroup>Ves10n20</VatGroup>
+				                    <AccountCode>47005010</AccountCode>
+                                </row></Document_Lines><Document_Installments>
+                                <row>
+                                    <DueDate>20251219</DueDate>
+                                    <Total>5.00</Total>
+                                </row>
+                            </Document_Installments></BO>
+                                </BOM>
+[2025-12-19 Fri 11:17:43] : invio xml: invoice
+[2025-12-19 Fri 11:17:44] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:17:44.16 </ResponseData><ResponseId>945883816</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>11416</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:17:44] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:17:44.16 </ResponseData><ResponseId>945883816</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>11416</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:17:44] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Operazione avvenuta con successo',
+  )),
+)
+[2025-12-19 Fri 11:17:44] : Tipo: invoice
+[2025-12-19 Fri 11:17:44] : Fattura inserita con docEnty: 11416
+[2025-12-19 Fri 11:17:44] : Fattura inviata correttamente docEntry[11416]
+[2025-12-19 Fri 11:17:44] : Dump array datiInvoice
+[2025-12-19 Fri 11:17:44] : {VARDUMP} : array (
+  'data' => '19122025_111743',
+  'data1' => '20251219',
+  'data2' => '19.12.2025',
+  'yearSeries' => '25',
+  'series' => '102',
+  'docnum' => '2025200017',
+  'cardcode' => 'CM003828',
+  'cost' => '5.00',
+  'art1' => 'MEcdOSS',
+  'descrart1' => 'Corso ECM Formazione OSS',
+  'artbollo' => 'MEbollo02',
+  'costbollo' => '0.00',
+  'descrbollo' => 'Marca da bollo',
+  'costtot' => '5.00',
+  'docentry' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '11416',
+  )),
+)
+[2025-12-19 Fri 11:17:44] : Tipo: woocommerce
+[2025-12-19 Fri 11:17:44] : Inserimento incasso: 11416
+[2025-12-19 Fri 11:17:44] : XML Admin Info
+[2025-12-19 Fri 11:17:44] : <AdmInfo>
+                                <requestUser>manager</requestUser>
+                                <requestDataTime>2025-12-19 11:12:44</requestDataTime>
+                                <requestDB>METMI_TEST</requestDB>
+                                <Object>24</Object>
+                                <Version>2</Version>
+                                </AdmInfo>
+[2025-12-19 Fri 11:17:44] : XML Documents
+[2025-12-19 Fri 11:17:44] : <Payments>
+                                    <row>
+                                        <DocType>rCustomer</DocType>
+                                        <DocDate>20251219</DocDate>
+                                        <TaxDate>20251219</TaxDate>
+                                        <VatDate>20251219</VatDate>
+                                        <CardCode>CM003828</CardCode>
+                                        <TransferAccount>27435020</TransferAccount>
+                                        <TransferSum>4.48</TransferSum>
+                                        <BankChargeAmount>0.52</BankChargeAmount>
+                                        <DocObjectCode>bopot_IncomingPayments</DocObjectCode>
+                                    </row>
+                                </Payments>
+[2025-12-19 Fri 11:17:44] : XML Articles
+[2025-12-19 Fri 11:17:44] : <Payments_Invoices><row>
+                                    <DocEntry>11416</DocEntry>
+                                    <DocLine>0</DocLine>
+                                    <SumApplied>5.00</SumApplied>
+                                    <InvoiceType>it_Invoice</InvoiceType>
+                                </row></Payments_Invoices>
+[2025-12-19 Fri 11:17:44] : Generazione dell' XML Incasso:
+[2025-12-19 Fri 11:17:44] : <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
+                                <soapenv:Header/>
+                                    <soapenv:Body>
+                                    <loc:BOsync>
+                                    <loc:reqType>set</loc:reqType>
+                                    <loc:objType>primenote</loc:objType>
+                                    <loc:docXml>&lt;BOM&gt;
+                                &lt;BO&gt;&lt;AdmInfo&gt;
+                                &lt;requestUser&gt;manager&lt;/requestUser&gt;
+                                &lt;requestDataTime&gt;2025-12-19 11:12:44&lt;/requestDataTime&gt;
+                                &lt;requestDB&gt;METMI_TEST&lt;/requestDB&gt;
+                                &lt;Object&gt;24&lt;/Object&gt;
+                                &lt;Version&gt;2&lt;/Version&gt;
+                                &lt;/AdmInfo&gt;&lt;Payments&gt;
+                                    &lt;row&gt;
+                                        &lt;DocType&gt;rCustomer&lt;/DocType&gt;
+                                        &lt;DocDate&gt;20251219&lt;/DocDate&gt;
+                                        &lt;TaxDate&gt;20251219&lt;/TaxDate&gt;
+                                        &lt;VatDate&gt;20251219&lt;/VatDate&gt;
+                                        &lt;CardCode&gt;CM003828&lt;/CardCode&gt;
+                                        &lt;TransferAccount&gt;27435020&lt;/TransferAccount&gt;
+                                        &lt;TransferSum&gt;4.48&lt;/TransferSum&gt;
+                                        &lt;BankChargeAmount&gt;0.52&lt;/BankChargeAmount&gt;
+                                        &lt;DocObjectCode&gt;bopot_IncomingPayments&lt;/DocObjectCode&gt;
+                                    &lt;/row&gt;
+                                &lt;/Payments&gt;&lt;Payments_Invoices&gt;&lt;row&gt;
+                                    &lt;DocEntry&gt;11416&lt;/DocEntry&gt;
+                                    &lt;DocLine&gt;0&lt;/DocLine&gt;
+                                    &lt;SumApplied&gt;5.00&lt;/SumApplied&gt;
+                                    &lt;InvoiceType&gt;it_Invoice&lt;/InvoiceType&gt;
+                                &lt;/row&gt;&lt;/Payments_Invoices&gt;&lt;/BO&gt;
+                                &lt;/BOM&gt;</loc:docXml>
+                              </loc:BOsync>
+                              </soapenv:Body>
+                              </soapenv:Envelope>
+[2025-12-19 Fri 11:17:44] : invio xml: profit
+[2025-12-19 Fri 11:17:45] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:17:45.01 </ResponseData><ResponseId>789042725</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>2019009798</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:17:45] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-19 11:17:45.01 </ResponseData><ResponseId>789042725</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>2019009798</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-19 Fri 11:17:45] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Operazione avvenuta con successo',
+  )),
+)
+[2025-12-19 Fri 11:17:45] : Tipo: profit
+[2025-12-19 Fri 11:17:45] : Incasso inserito con docEnty: 2019009798
+[2025-12-19 Fri 11:17:45] : Incasso inviato correttamente

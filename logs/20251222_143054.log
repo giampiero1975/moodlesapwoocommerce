@@ -1,0 +1,612 @@
+
+[2025-12-22 Mon 14:30:54] : **************
+
+[2025-12-22 Mon 14:30:54] : {PARSE URL} : array (
+  0 => '',
+  1 => 'index.php',
+  2 => 'sap',
+  3 => 'ins',
+)
+[2025-12-22 Mon 14:30:54] : {VARDUMP} : array (
+  'id' => '100',
+)
+[2025-12-22 Mon 14:30:54] : Recupero record da moodle_payments per ID: 100
+[2025-12-22 Mon 14:30:54] : SQL: select * from moodle_payments where id=100
+ > entro in italia
+method: UserController::insInvoice
+[2025-12-22 Mon 14:30:54] : Recupero record da moodle_payments per ID: 100
+[2025-12-22 Mon 14:30:54] : SQL: select * from moodle_payments where id=100
+[2025-12-22 Mon 14:30:54] : {VARDUMP} : array (
+  'id' => 100,
+  'payment_id' => 9773,
+  'mdl' => 'mdl_formazioneoss',
+  'courseid' => 30,
+  'userid' => 616,
+  'cost' => '5.00',
+  'tipo' => 'woocommerce',
+)
+[2025-12-22 Mon 14:30:59] : Dati mappati da WooCommerce:
+[2025-12-22 Mon 14:30:59] : {VARDUMP} : array (
+  0 => 
+  array (
+    'nome' => 'Arianna D Avolio',
+    'email' => 'aridavolio@gmail.com',
+    'Rag' => 'Arianna D Avolio',
+    'CF' => 'DVLRNN66C54G492V',
+    'partitaiva' => '',
+    'fattind' => 'via Lago di Como 21',
+    'fattcomune' => 'Pomezia',
+    'fattcap' => '00071',
+    'fattprov' => 'RM',
+    'telefono' => '+393496144895',
+    'PEC' => '',
+    'IPACodePA' => '',
+  ),
+  1 => 
+  array (
+    'cost' => '5.00',
+    'fullname' => 'Il piede diabetico',
+    'idnumber' => 'MEcdOSS',
+    'datapagamento' => '2025-12-18T15:51:52',
+  ),
+)
+[2025-12-22 Mon 14:30:59] : Recupero dati utenti da SAP
+[2025-12-22 Mon 14:31:03] : getSapUser: Cerco utente con CF: DVLRNN66C54G492V
+[2025-12-22 Mon 14:31:03] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'DVLRNN66C54G492V' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-22 Mon 14:31:03] : utente non presente in SAP
+[2025-12-22 Mon 14:31:03] : Cliente Arianna D Avolio {DVLRNN66C54G492V} non presente su SAP. Tentativo di creazione.
+[2025-12-22 Mon 14:31:03] : SELECT (max(SUBSTRING ( cardcode ,3 , len(cardcode) ))+1) as 'maxCardCode' FROM OCRD WHERE cardcode LIKE 'CM%';
+[2025-12-22 Mon 14:31:03] : nuovo CardCode generato: CM003829
+[2025-12-22 Mon 14:31:03] : Generazione XML per nuovo BP
+[2025-12-22 Mon 14:31:03] : XML Business Partner
+[2025-12-22 Mon 14:31:03] : <BusinessPartner><RequestInfo>
+                                    <requestUser>manager</requestUser>
+                                    <requestDataTime>2025-12-22 02:12:03</requestDataTime>
+                                    <requestDB>METMI_TEST</requestDB>
+                                </RequestInfo><Data>
+                                <codice>CM003829</codice>
+                                <ragsoc>Arianna D Avolio</ragsoc>
+                                <conto>14001010</conto>
+                                <tiposoll></tiposoll>
+                                <tipoimp></tipoimp>
+                                <codiva></codiva>
+                                <cat>104</cat>
+                                <zona></zona>
+                                <valuta>EUR</valuta>
+                                <codage>-1</codage>
+                                <piva></piva>
+                                <codfis>DVLRNN66C54G492V</codfis>
+                                <singlepay>N</singlepay>
+                                <tel1>+393496144895</tel1>
+                                <tel2></tel2>
+                                <fax></fax>
+                                <email>aridavolio@gmail.com</email>
+                                <web></web>
+                                <lingua>13</lingua>
+                                <tipobp>CBI</tipobp>
+                                <bloccopag>N</bloccopag>
+                                <numlettes></numlettes>
+                                <impes></impes>
+                                <dtiniese></dtiniese>
+                                <dtfinese></dtfinese>
+                                <impfido></impfido>
+                                <annullato>N</annullato>
+                                <noteana></noteana>
+                                <abiint>08374</abiint>
+                                <nazint>IT</nazint>
+                                <cabint>32480</cabint>
+                                <ccint>000000113266</ccint>
+                                <codpag></codpag>
+                                <sapproperty></sapproperty>
+                                <intra>N</intra>
+                                <tipoes>I</tipoes>
+                                <indirpec></indirpec>
+                                <coddestsdi>0000000</coddestsdi>
+                                <CheckPA>N</CheckPA>
+                                <codop347></codop347>
+                                <opassic347>N</opassic347>
+                                <ritacc>N</ritacc>
+                                <Conguaglio>N</Conguaglio>
+                            	<settore>-1</settore>
+                                <userfield></userfield>
+                                <indirizzi>
+                                  <indirizzo>
+                                    <tipoind>B</tipoind>
+                                    <idind>Arianna D Avolio</idind>
+                                    <viaind>via Lago di Como 21</viaind>
+                                    <capind>00071</capind>
+                                    <locind>Pomezia</locind>
+                                    <statind>IT</statind>
+                                    <provind>RM</provind>
+                                    <pivaind></pivaind>
+                                  </indirizzo>
+                                  <indirizzo>
+                                    <tipoind>S</tipoind>
+                                    <idind>Arianna D Avolio</idind>
+                                    <viaind>via Lago di Como 21</viaind>
+                                    <capind>00071</capind>
+                                    <locind>Pomezia</locind>
+                                    <statind>IT</statind>
+                                    <provind>RM</provind>
+                                    <pivaind></pivaind>
+                                  </indirizzo>
+                                </indirizzi>
+                        </Data></BusinessPartner>
+[2025-12-22 Mon 14:31:03] : <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
+                                <soapenv:Header/>
+                                    <soapenv:Body>
+                                    <loc:BOsync>
+                                    <loc:reqType>set</loc:reqType>
+                                    <loc:objType></loc:objType>
+                                    <loc:docXml>&lt;BusinessPartner&gt;&lt;RequestInfo&gt;
+                                    &lt;requestUser&gt;manager&lt;/requestUser&gt;
+                                    &lt;requestDataTime&gt;2025-12-22 02:12:03&lt;/requestDataTime&gt;
+                                    &lt;requestDB&gt;METMI_TEST&lt;/requestDB&gt;
+                                &lt;/RequestInfo&gt;&lt;Data&gt;
+                                &lt;codice&gt;CM003829&lt;/codice&gt;
+                                &lt;ragsoc&gt;Arianna D Avolio&lt;/ragsoc&gt;
+                                &lt;conto&gt;14001010&lt;/conto&gt;
+                                &lt;tiposoll&gt;&lt;/tiposoll&gt;
+                                &lt;tipoimp&gt;&lt;/tipoimp&gt;
+                                &lt;codiva&gt;&lt;/codiva&gt;
+                                &lt;cat&gt;104&lt;/cat&gt;
+                                &lt;zona&gt;&lt;/zona&gt;
+                                &lt;valuta&gt;EUR&lt;/valuta&gt;
+                                &lt;codage&gt;-1&lt;/codage&gt;
+                                &lt;piva&gt;&lt;/piva&gt;
+                                &lt;codfis&gt;DVLRNN66C54G492V&lt;/codfis&gt;
+                                &lt;singlepay&gt;N&lt;/singlepay&gt;
+                                &lt;tel1&gt;+393496144895&lt;/tel1&gt;
+                                &lt;tel2&gt;&lt;/tel2&gt;
+                                &lt;fax&gt;&lt;/fax&gt;
+                                &lt;email&gt;aridavolio@gmail.com&lt;/email&gt;
+                                &lt;web&gt;&lt;/web&gt;
+                                &lt;lingua&gt;13&lt;/lingua&gt;
+                                &lt;tipobp&gt;CBI&lt;/tipobp&gt;
+                                &lt;bloccopag&gt;N&lt;/bloccopag&gt;
+                                &lt;numlettes&gt;&lt;/numlettes&gt;
+                                &lt;impes&gt;&lt;/impes&gt;
+                                &lt;dtiniese&gt;&lt;/dtiniese&gt;
+                                &lt;dtfinese&gt;&lt;/dtfinese&gt;
+                                &lt;impfido&gt;&lt;/impfido&gt;
+                                &lt;annullato&gt;N&lt;/annullato&gt;
+                                &lt;noteana&gt;&lt;/noteana&gt;
+                                &lt;abiint&gt;08374&lt;/abiint&gt;
+                                &lt;nazint&gt;IT&lt;/nazint&gt;
+                                &lt;cabint&gt;32480&lt;/cabint&gt;
+                                &lt;ccint&gt;000000113266&lt;/ccint&gt;
+                                &lt;codpag&gt;&lt;/codpag&gt;
+                                &lt;sapproperty&gt;&lt;/sapproperty&gt;
+                                &lt;intra&gt;N&lt;/intra&gt;
+                                &lt;tipoes&gt;I&lt;/tipoes&gt;
+                                &lt;indirpec&gt;&lt;/indirpec&gt;
+                                &lt;coddestsdi&gt;0000000&lt;/coddestsdi&gt;
+                                &lt;CheckPA&gt;N&lt;/CheckPA&gt;
+                                &lt;codop347&gt;&lt;/codop347&gt;
+                                &lt;opassic347&gt;N&lt;/opassic347&gt;
+                                &lt;ritacc&gt;N&lt;/ritacc&gt;
+                                &lt;Conguaglio&gt;N&lt;/Conguaglio&gt;
+                            	&lt;settore&gt;-1&lt;/settore&gt;
+                                &lt;userfield&gt;&lt;/userfield&gt;
+                                &lt;indirizzi&gt;
+                                  &lt;indirizzo&gt;
+                                    &lt;tipoind&gt;B&lt;/tipoind&gt;
+                                    &lt;idind&gt;Arianna D Avolio&lt;/idind&gt;
+                                    &lt;viaind&gt;via Lago di Como 21&lt;/viaind&gt;
+                                    &lt;capind&gt;00071&lt;/capind&gt;
+                                    &lt;locind&gt;Pomezia&lt;/locind&gt;
+                                    &lt;statind&gt;IT&lt;/statind&gt;
+                                    &lt;provind&gt;RM&lt;/provind&gt;
+                                    &lt;pivaind&gt;&lt;/pivaind&gt;
+                                  &lt;/indirizzo&gt;
+                                  &lt;indirizzo&gt;
+                                    &lt;tipoind&gt;S&lt;/tipoind&gt;
+                                    &lt;idind&gt;Arianna D Avolio&lt;/idind&gt;
+                                    &lt;viaind&gt;via Lago di Como 21&lt;/viaind&gt;
+                                    &lt;capind&gt;00071&lt;/capind&gt;
+                                    &lt;locind&gt;Pomezia&lt;/locind&gt;
+                                    &lt;statind&gt;IT&lt;/statind&gt;
+                                    &lt;provind&gt;RM&lt;/provind&gt;
+                                    &lt;pivaind&gt;&lt;/pivaind&gt;
+                                  &lt;/indirizzo&gt;
+                                &lt;/indirizzi&gt;
+                        &lt;/Data&gt;&lt;/BusinessPartner&gt;</loc:docXml>
+                              </loc:BOsync>
+                              </soapenv:Body>
+                              </soapenv:Envelope>
+[2025-12-22 Mon 14:31:03] : getSapUser: XML per nuovo utente creato. Tento invio a SAP (sendWS)...
+[2025-12-22 Mon 14:31:03] : invio xml: bp
+[2025-12-22 Mon 14:31:12] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-22 02:31:06.09 </ResponseData><ResponseId>1916741049</ResponseId><ResponseAction>Add</ResponseAction><ResponseQuery /><DebugPoint /><SessionId>A42C3916-EB46-42AF-899A-12211B489DE7</SessionId></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Cliente CM003829 aggiunto con successo</Message><ReturnKey>CM003829</ReturnKey></Esito></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-22 Mon 14:31:12] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-22 02:31:06.09 </ResponseData><ResponseId>1916741049</ResponseId><ResponseAction>Add</ResponseAction><ResponseQuery /><DebugPoint /><SessionId>A42C3916-EB46-42AF-899A-12211B489DE7</SessionId></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Cliente CM003829 aggiunto con successo</Message><ReturnKey>CM003829</ReturnKey></Esito></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-22 Mon 14:31:12] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Cliente CM003829 aggiunto con successo',
+  )),
+)
+[2025-12-22 Mon 14:31:12] : Tipo: bp
+[2025-12-22 Mon 14:31:12] : Business Partner inserito con successo: CM003829
+[2025-12-22 Mon 14:31:12] : getSapUser: Utente creato con successo su SAP. Recupero i dati aggiornati.
+[2025-12-22 Mon 14:31:12] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'DVLRNN66C54G492V' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-22 Mon 14:31:12] : {VARDUMP} : array (
+  0 => 
+  array (
+    'cardcode' => 'CM003829',
+    'cardname' => 'Arianna D Avolio',
+    'AddId' => 'DVLRNN66C54G492V',
+    'partitaiva' => '',
+    'IPACodePA' => '0000000',
+    'E_Mail' => 'aridavolio@gmail.com',
+    'PECAddr' => NULL,
+    'ShipToDef' => 'Arianna D Avolio',
+    'BillToDef' => 'Arianna D Avolio',
+    'pymcode' => 'Cl.Bon.Bancario',
+  ),
+)
+[2025-12-22 Mon 14:31:12] : *** GET indirizzo fatturazione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003829' AND AdresType='B';
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Arianna D Avolio',
+    'Street' => 'via Lago di Como 21',
+    'ZipCode' => '00071',
+    'City' => 'Pomezia',
+    'State' => 'RM',
+    'AdresType' => 'B',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : *** GET indirizzo spedizione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003829' AND AdresType='S';
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Arianna D Avolio',
+    'Street' => 'via Lago di Como 21',
+    'ZipCode' => '00071',
+    'City' => 'Pomezia',
+    'State' => 'RM',
+    'AdresType' => 'S',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  'cardcode' => 'CM003829',
+  'cardname' => 'Arianna D Avolio',
+  'AddId' => 'DVLRNN66C54G492V',
+  'partitaiva' => '',
+  'E_Mail' => 'aridavolio@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Arianna D Avolio',
+  'BillToDef' => 'Arianna D Avolio',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Arianna D Avolio',
+  'Address' => 'via Lago di Como 21',
+  'City' => 'Pomezia',
+  'ZipCode' => '00071',
+  'Prov' => 'RM',
+  'NameAddressS' => 'Arianna D Avolio',
+  'MailAddres' => 'via Lago di Como 21',
+  'MailCity' => 'Pomezia',
+  'MailZipCod' => '00071',
+  'MailProv' => 'RM',
+)
+[2025-12-22 Mon 14:31:13] : getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  'cardcode' => 'CM003829',
+  'cardname' => 'Arianna D Avolio',
+  'AddId' => 'DVLRNN66C54G492V',
+  'partitaiva' => '',
+  'E_Mail' => 'aridavolio@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Arianna D Avolio',
+  'BillToDef' => 'Arianna D Avolio',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Arianna D Avolio',
+  'Address' => 'via Lago di Como 21',
+  'City' => 'Pomezia',
+  'ZipCode' => '00071',
+  'Prov' => 'RM',
+  'NameAddressS' => 'Arianna D Avolio',
+  'MailAddres' => 'via Lago di Como 21',
+  'MailCity' => 'Pomezia',
+  'MailZipCod' => '00071',
+  'MailProv' => 'RM',
+)
+[2025-12-22 Mon 14:31:13] : *** Utente esiste, verifico allineamento dati
+[2025-12-22 Mon 14:31:13] : *** Verifica allineamento dati fatturazione
+[2025-12-22 Mon 14:31:13] : {IPACodePA} Moodle valido
+[2025-12-22 Mon 14:31:13] : {Address} disallineata
+[2025-12-22 Mon 14:31:13] : *** Verifica allineamento dati spedizione
+[2025-12-22 Mon 14:31:13] : Dump array allineamento
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  'B' => 
+  array (
+    'Address' => 'Arianna D Avolio',
+  ),
+  'S' => 
+  array (
+    'Address' => 'Arianna D Avolio',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : update CRD1 set Address = 'Arianna D Avolio' where cardcode='CM003829' and AdresType='B';
+[2025-12-22 Mon 14:31:13] : update CRD1 set Address = 'Arianna D Avolio' where cardcode='CM003829' and AdresType='S';
+[2025-12-22 Mon 14:31:13] : *** Allineamento effettuato con successo, riprendo i dati aggiornati
+[2025-12-22 Mon 14:31:13] : Recupero dati utenti da SAP
+[2025-12-22 Mon 14:31:13] : getSapUser: Cerco utente con CF: DVLRNN66C54G492V
+[2025-12-22 Mon 14:31:13] : *** GET anagrafica da OCRD: SELECT TOP 1 OCRD.cardcode, OCRD.cardname, OCRD.AddId, OCRD.LicTradNum AS 'partitaiva', IPACodePA, E_Mail, PECAddr, ShipToDef, BillToDef, pymcode FROM OCRD WHERE OCRD.AddId = 'DVLRNN66C54G492V' and cardcode like 'CM%'  ORDER BY cardcode desc;
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  0 => 
+  array (
+    'cardcode' => 'CM003829',
+    'cardname' => 'Arianna D Avolio',
+    'AddId' => 'DVLRNN66C54G492V',
+    'partitaiva' => '',
+    'IPACodePA' => '0000000',
+    'E_Mail' => 'aridavolio@gmail.com',
+    'PECAddr' => NULL,
+    'ShipToDef' => 'Arianna D Avolio',
+    'BillToDef' => 'Arianna D Avolio',
+    'pymcode' => 'Cl.Bon.Bancario',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : *** GET indirizzo fatturazione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003829' AND AdresType='B';
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Arianna D Avolio',
+    'Street' => 'via Lago di Como 21',
+    'ZipCode' => '00071',
+    'City' => 'Pomezia',
+    'State' => 'RM',
+    'AdresType' => 'B',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : *** GET indirizzo spedizione CRD1: SELECT CRD1.Address, CRD1.Street, CRD1.ZipCode, CRD1.City, CRD1.State, CRD1.AdresType FROM CRD1 WHERE cardcode = 'CM003829' AND AdresType='S';
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  0 => 
+  array (
+    'Address' => 'Arianna D Avolio',
+    'Street' => 'via Lago di Como 21',
+    'ZipCode' => '00071',
+    'City' => 'Pomezia',
+    'State' => 'RM',
+    'AdresType' => 'S',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  'cardcode' => 'CM003829',
+  'cardname' => 'Arianna D Avolio',
+  'AddId' => 'DVLRNN66C54G492V',
+  'partitaiva' => '',
+  'E_Mail' => 'aridavolio@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Arianna D Avolio',
+  'BillToDef' => 'Arianna D Avolio',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Arianna D Avolio',
+  'Address' => 'via Lago di Como 21',
+  'City' => 'Pomezia',
+  'ZipCode' => '00071',
+  'Prov' => 'RM',
+  'NameAddressS' => 'Arianna D Avolio',
+  'MailAddres' => 'via Lago di Como 21',
+  'MailCity' => 'Pomezia',
+  'MailZipCod' => '00071',
+  'MailProv' => 'RM',
+)
+[2025-12-22 Mon 14:31:13] : getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  'cardcode' => 'CM003829',
+  'cardname' => 'Arianna D Avolio',
+  'AddId' => 'DVLRNN66C54G492V',
+  'partitaiva' => '',
+  'E_Mail' => 'aridavolio@gmail.com',
+  'PEC' => '',
+  'IPACodePA' => '0000000',
+  'ShipToDef' => 'Arianna D Avolio',
+  'BillToDef' => 'Arianna D Avolio',
+  'pymcode' => 'Cl.Bon.Bancario',
+  'NameAddressB' => 'Arianna D Avolio',
+  'Address' => 'via Lago di Como 21',
+  'City' => 'Pomezia',
+  'ZipCode' => '00071',
+  'Prov' => 'RM',
+  'NameAddressS' => 'Arianna D Avolio',
+  'MailAddres' => 'via Lago di Como 21',
+  'MailCity' => 'Pomezia',
+  'MailZipCod' => '00071',
+  'MailProv' => 'RM',
+)
+[2025-12-22 Mon 14:31:13] : Recupero articolo SAP con idnumber: MEcdOSS
+[2025-12-22 Mon 14:31:13] : SELECT trim(OITM.itemcode) as itemcode, OITM.itemname, OITM.vatgourpSa, OITW.RevenuesAc   FROM OITM JOIN OITW ON OITM.ItemCode = OITW.ItemCode WHERE OITW.itemcode ='MEcdOSS';
+[2025-12-22 Mon 14:31:13] : Dump array articoloSap
+[2025-12-22 Mon 14:31:13] : {VARDUMP} : array (
+  0 => 
+  array (
+    'itemcode' => 'MEcdOSS',
+    'itemname' => 'Corso ECM Formazione OSS',
+    'vatgourpSa' => 'Ves10n20',
+    'RevenuesAc' => '47005010',
+  ),
+)
+[2025-12-22 Mon 14:31:13] : FASE: Articolo SAP recuperato con successo.
+[2025-12-22 Mon 14:31:13] : Numero serie per tipo [woocommerce]
+[2025-12-22 Mon 14:31:13] : Nuovo documento di numerazione serie : FCLPAY25
+[2025-12-22 Mon 14:31:13] : SELECT Series from dbo.NNM1 where seriesName='FCLPAY25'
+[2025-12-22 Mon 14:31:13] : Numero serie : 102
+[2025-12-22 Mon 14:31:13] : Nuovo documento di numerazione serie : 102
+[2025-12-22 Mon 14:31:13] : SELECT NextNumber from dbo.NNM1 where series=102
+[2025-12-22 Mon 14:31:13] : Numero documento : 2025200018
+[2025-12-22 Mon 14:31:13] : XML Invoice
+[2025-12-22 Mon 14:31:13] : <BOM>
+                                <BO><AdmInfo>
+                                <requestUser>manager</requestUser>
+                                <requestDataTime>2025-12-22 02:12:13</requestDataTime>
+                                <requestDB>METMI_TEST</requestDB>
+                                <Object>13</Object>
+                                <Version>2</Version>
+                            </AdmInfo><Documents>
+                                <row>
+                                    <Series>102</Series>
+                                    <DocNum>2025200018</DocNum>
+                                    <CardCode>CM003829</CardCode>
+                                    <ShipToCode>Arianna D Avolio</ShipToCode>
+                                    <DocDate>20251222</DocDate>
+                                    <TaxDate>20251222</TaxDate>
+                                    <DocCurrency>EUR</DocCurrency>
+                                    <PaymentMethod>Cl.Bon.Bancario</PaymentMethod>
+                                    <PaymentGroupCode>54</PaymentGroupCode>
+                                    <DocTotal>5.00</DocTotal>
+                                    <U_B1SYS_INV_TYPE>TD01</U_B1SYS_INV_TYPE>
+                                </row>
+                            </Documents><Document_Lines><row>
+                                    <ItemCode>MEcdOSS</ItemCode>
+				                    <ItemDescription>Corso ECM Formazione OSS - Arianna D Avolio</ItemDescription>
+				                    <Quantity>1</Quantity>
+				                    <LineTotal>5.00</LineTotal>
+				                    <VatGroup>Ves10n20</VatGroup>
+				                    <AccountCode>47005010</AccountCode>
+                                </row></Document_Lines><Document_Installments>
+                                <row>
+                                    <DueDate>20251222</DueDate>
+                                    <Total>5.00</Total>
+                                </row>
+                            </Document_Installments></BO>
+                                </BOM>
+[2025-12-22 Mon 14:31:13] : invio xml: invoice
+[2025-12-22 Mon 14:31:22] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-22 02:31:14.43 </ResponseData><ResponseId>439285902</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>11417</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-22 Mon 14:31:22] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-22 02:31:14.43 </ResponseData><ResponseId>439285902</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>11417</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-22 Mon 14:31:22] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Operazione avvenuta con successo',
+  )),
+)
+[2025-12-22 Mon 14:31:22] : Tipo: invoice
+[2025-12-22 Mon 14:31:22] : Fattura inserita con docEnty: 11417
+[2025-12-22 Mon 14:31:22] : Fattura inviata correttamente docEntry[11417]
+[2025-12-22 Mon 14:31:22] : Dump array datiInvoice
+[2025-12-22 Mon 14:31:22] : {VARDUMP} : array (
+  'data' => '22122025_143113',
+  'data1' => '20251222',
+  'data2' => '22.12.2025',
+  'yearSeries' => '25',
+  'series' => '102',
+  'docnum' => '2025200018',
+  'cardcode' => 'CM003829',
+  'cost' => '5.00',
+  'art1' => 'MEcdOSS',
+  'descrart1' => 'Corso ECM Formazione OSS',
+  'artbollo' => 'MEbollo02',
+  'costbollo' => '0.00',
+  'descrbollo' => 'Marca da bollo',
+  'costtot' => '5.00',
+  'docentry' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '11417',
+  )),
+)
+[2025-12-22 Mon 14:31:25] : Tipo: woocommerce
+[2025-12-22 Mon 14:31:25] : Inserimento incasso: 11417
+[2025-12-22 Mon 14:31:25] : XML Admin Info
+[2025-12-22 Mon 14:31:25] : <AdmInfo>
+                                <requestUser>manager</requestUser>
+                                <requestDataTime>2025-12-22 02:12:25</requestDataTime>
+                                <requestDB>METMI_TEST</requestDB>
+                                <Object>24</Object>
+                                <Version>2</Version>
+                                </AdmInfo>
+[2025-12-22 Mon 14:31:25] : XML Documents
+[2025-12-22 Mon 14:31:25] : <Payments>
+                                    <row>
+                                        <DocType>rCustomer</DocType>
+                                        <DocDate>20251222</DocDate>
+                                        <TaxDate>20251222</TaxDate>
+                                        <VatDate>20251222</VatDate>
+                                        <CardCode>CM003829</CardCode>
+                                        <TransferAccount>27435020</TransferAccount>
+                                        <TransferSum>4.48</TransferSum>
+                                        <BankChargeAmount>0.52</BankChargeAmount>
+                                        <DocObjectCode>bopot_IncomingPayments</DocObjectCode>
+                                    </row>
+                                </Payments>
+[2025-12-22 Mon 14:31:25] : XML Articles
+[2025-12-22 Mon 14:31:25] : <Payments_Invoices><row>
+                                    <DocEntry>11417</DocEntry>
+                                    <DocLine>0</DocLine>
+                                    <SumApplied>5.00</SumApplied>
+                                    <InvoiceType>it_Invoice</InvoiceType>
+                                </row></Payments_Invoices>
+[2025-12-22 Mon 14:31:25] : Generazione dell' XML Incasso:
+[2025-12-22 Mon 14:31:25] : <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
+                                <soapenv:Header/>
+                                    <soapenv:Body>
+                                    <loc:BOsync>
+                                    <loc:reqType>set</loc:reqType>
+                                    <loc:objType>primenote</loc:objType>
+                                    <loc:docXml>&lt;BOM&gt;
+                                &lt;BO&gt;&lt;AdmInfo&gt;
+                                &lt;requestUser&gt;manager&lt;/requestUser&gt;
+                                &lt;requestDataTime&gt;2025-12-22 02:12:25&lt;/requestDataTime&gt;
+                                &lt;requestDB&gt;METMI_TEST&lt;/requestDB&gt;
+                                &lt;Object&gt;24&lt;/Object&gt;
+                                &lt;Version&gt;2&lt;/Version&gt;
+                                &lt;/AdmInfo&gt;&lt;Payments&gt;
+                                    &lt;row&gt;
+                                        &lt;DocType&gt;rCustomer&lt;/DocType&gt;
+                                        &lt;DocDate&gt;20251222&lt;/DocDate&gt;
+                                        &lt;TaxDate&gt;20251222&lt;/TaxDate&gt;
+                                        &lt;VatDate&gt;20251222&lt;/VatDate&gt;
+                                        &lt;CardCode&gt;CM003829&lt;/CardCode&gt;
+                                        &lt;TransferAccount&gt;27435020&lt;/TransferAccount&gt;
+                                        &lt;TransferSum&gt;4.48&lt;/TransferSum&gt;
+                                        &lt;BankChargeAmount&gt;0.52&lt;/BankChargeAmount&gt;
+                                        &lt;DocObjectCode&gt;bopot_IncomingPayments&lt;/DocObjectCode&gt;
+                                    &lt;/row&gt;
+                                &lt;/Payments&gt;&lt;Payments_Invoices&gt;&lt;row&gt;
+                                    &lt;DocEntry&gt;11417&lt;/DocEntry&gt;
+                                    &lt;DocLine&gt;0&lt;/DocLine&gt;
+                                    &lt;SumApplied&gt;5.00&lt;/SumApplied&gt;
+                                    &lt;InvoiceType&gt;it_Invoice&lt;/InvoiceType&gt;
+                                &lt;/row&gt;&lt;/Payments_Invoices&gt;&lt;/BO&gt;
+                                &lt;/BOM&gt;</loc:docXml>
+                              </loc:BOsync>
+                              </soapenv:Body>
+                              </soapenv:Envelope>
+[2025-12-22 Mon 14:31:25] : invio xml: profit
+[2025-12-22 Mon 14:31:26] : <?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-22 02:31:26.81 </ResponseData><ResponseId>467768172</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>2019009799</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-22 Mon 14:31:26] : Risposta curl<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"><soap:Body><BOsyncResponse xmlns="http://localhost/"><BOsyncResult><XMLResponseBuilder xmlns=""><ResponseInfo><ResponseUser>ws4s</ResponseUser><ResponseData>2025-12-22 02:31:26.81 </ResponseData><ResponseId>467768172</ResponseId><ResponseAction /><ResponseQuery /><DebugPoint /><SessionId /></ResponseInfo><Esito><IsError>N</IsError><Code>0</Code><Message>Operazione avvenuta con successo</Message><ReturnKey /></Esito><Document><DocEntry>2019009799</DocEntry></Document></XMLResponseBuilder></BOsyncResult></BOsyncResponse></soap:Body></soap:Envelope>
+[2025-12-22 Mon 14:31:26] : {VARDUMP} : array (
+  'error' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'N',
+  )),
+  'code' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => '0',
+  )),
+  'message' => 
+  \SimpleXMLElement::__set_state(array(
+     0 => 'Operazione avvenuta con successo',
+  )),
+)
+[2025-12-22 Mon 14:31:26] : Tipo: profit
+[2025-12-22 Mon 14:31:26] : Incasso inserito con docEnty: 2019009799
+[2025-12-22 Mon 14:31:26] : Incasso inviato correttamente

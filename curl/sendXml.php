@@ -3,6 +3,7 @@
 require_once PROJECT_ROOT_PATH . "phplogger.php";
 require_once PROJECT_ROOT_PATH . "/inc/config.php";
 
+#[\AllowDynamicProperties]
 class sendXml extends UserController{
     
     // private $soapUrl = "http://192.168.10.44/wsToSAP/B1Sync.asmx?reqType=set&objType=documenti";
@@ -59,7 +60,7 @@ class sendXml extends UserController{
             }
                 
             //lettura response WS
-            $xml = simplexml_load_string(utf8_encode($this->response));
+            $xml = simplexml_load_string(mb_convert_encoding($this->response, 'UTF-8', 'ISO-8859-1'));
             $xml->registerXPathNamespace('test',"http://schemas.xmlsoap.org/soap/envelope/");
             
             //echo "<pre>";

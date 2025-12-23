@@ -11,7 +11,7 @@ echo "  VERIFICA DATI COMPLETI ORDINI WOOCOMMERCE \n";
 echo "==================================================\n\n";
 
 // Gli ID degli ordini che vogliamo analizzare
-$order_ids_to_check = [7502, 7881, 7892, 7884];
+$order_ids_to_check = [7885, 7972];
 
 // Identificatore dell'istanza da usare (dal tuo config.php)
 $instance_identifier = 'mdl_formazioneoss';

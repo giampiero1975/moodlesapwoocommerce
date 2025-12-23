@@ -3,7 +3,7 @@
 require __DIR__ . "/inc/bootstrap.php";
 require PROJECT_ROOT_PATH . "Controller/Api/UserController.php";
 require PROJECT_ROOT_PATH . "Controller/Api/UserControllerEs.php";
-# http://moodlesapwoocommerce.test/index.php/sap/ins?id=1
+# http://moodlesapwoocommerce.test/index.php/sap/ins?id=100
 try {	
     $logger = Logger::get_logger();
     $logger->log("**************\n");

@@ -51,7 +51,29 @@ class WooCommerceModel {
         curl_close($ch);
         
         if ($http_code == 200) {
-            return json_decode($response, true);
+            $orderData = json_decode($response, true);
+            
+            // --- INIZIO MODIFICA CON REGEX ---
+            // Usiamo una regular expression per rimuovere QUALSIASI carattere di spaziatura
+            // (spazi, tabulazioni, a capo, ecc.) da qualsiasi punto della stringa.
+            if (isset($orderData['meta_data']) && is_array($orderData['meta_data'])) {
+                foreach ($orderData['meta_data'] as $index => $meta_item) {
+                    // Controlla le chiavi più comuni per il Codice Fiscale
+                    if (isset($meta_item['key']) && in_array($meta_item['key'], ['_billing_cf', 'billing_cf', 'CF', 'codice_fiscale'])) {
+                        if (isset($meta_item['value']) && is_string($meta_item['value'])) {
+                            // La regex '/\s+/' trova ogni occorrenza di uno o più caratteri di spaziatura
+                            // e li sostituisce con una stringa vuota ''.
+                            $orderData['meta_data'][$index]['value'] = preg_replace('/\s+/', '', $meta_item['value']);
+                        }
+                        // Esci dal ciclo una volta trovato il campo per ottimizzare
+                        break;
+                    }
+                }
+            }
+            // --- FINE MODIFICA ---
+            
+            return $orderData;
+            
         } else {
             return null;
         }
