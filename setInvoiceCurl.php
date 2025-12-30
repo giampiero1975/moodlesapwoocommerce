@@ -5,8 +5,6 @@ try {
     $moodle = new dbmoodle('mdlapps_moodleadmin');
     // verifico che siamo presenti pagamenti non elaborati(sales='0') che non siano stati inseriti più di 30 minuti fà per inviarlo una sola volta
     $enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and `logfile` IS null;");
-    //$enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and TIMESTAMPDIFF(MINUTE,data_ins,NOW()) <=30;");
-    //$enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0';");
 
     # echo "<pre>";
     if (empty($enrol_paypal)) {

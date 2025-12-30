@@ -1,0 +1,3 @@
+# Ignora tutta la cartella dei log e fatture
+logs/
+fatture/

@@ -142,14 +142,13 @@ class costanti {
             'secret' => 'cs_f3f0bebf009322f74965aaf24899f0ad0b924f60',
             'idnumber_sap' => 'MEcdOSS' 
         ],
-        // Aggiungi qui altre istanze se necessario, usando lo stesso identificatore di MAILBOXES
-        /*
-         'mdl_altro_sito' => [
-         'url' => 'https://altro-sito.com',
-         'key' => 'ck_xxxxxxxxxxxxxxxxxxxxxxxx',
-         'secret' => 'cs_xxxxxxxxxxxxxxxxxxxxxxxx'
-         ]
-         */
+        'mdl_professionefarmacia' => [
+            // WooCommerce -> Impostazioni -> Avanzate -> REST API
+            'url' => 'https://professionefarmacia.it',
+            'key' => 'ck_7ea7443ddd23a5f42cfb73576cb08ebbb67d486d',
+            'secret' => 'cs_83861ba46e0a1665d59587f17dea41031e458ea1',
+            'idnumber_sap' => 'MEcdPF' // --> verifica con Alessia
+        ],
     ];
     // ---- FINE NUOVA SEZIONE ----
 }

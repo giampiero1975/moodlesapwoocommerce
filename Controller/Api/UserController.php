@@ -156,66 +156,81 @@ class UserController extends BaseController
      * Converte i dati ricevuti dall'API di WooCommerce nella vecchia struttura dati.
      */
     /**
-     * VERSIONE DEFINITIVA: Pulizia Dati + Fix Data Bonifico
+     * VERSIONE FIX ARRAY: Salta i campi array che mandano in crash trim()
      */
     private function mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails) {
         $billing = $orderData["billing"];
         
-        // =================================================================
-        // 1. QUI AVVIENE LA CHIAMATA: "sanitizeString" entra in azione
-        // =================================================================
-        
-        // Pulisce Nome + Cognome
+        // 1. PULIZIA DATI ANAGRAFICI BASE
         $nome = $this->sanitizeString($billing['first_name'] . ' ' . $billing['last_name']);
-        
-        // Pulisce Indirizzo
         $indirizzo = $this->sanitizeString($billing['address_1']);
-        
-        // Pulisce Città
         $citta = $this->sanitizeString($billing['city']);
-        
-        // Pulisce Azienda
         $azienda = $this->sanitizeString($billing['company']);
         
-        // =================================================================
-        
-        // Logica Ragione Sociale (usa i dati puliti)
         $ragioneSociale = !empty($azienda) ? $azienda : $nome;
         
-        // ... [Recupero Meta Dati - RIMANE UGUALE] ...
+        // 2. RECUPERO METADATI (CF, PIVA, PEC, SDI)
         $cf = ''; $piva = ''; $pec = ''; $sdi = ''; $dataBonifico = '';
+        
         foreach ($orderData['meta_data'] as $meta) {
-            // ... (Codice esistente per recupero CF/PIVA/Date) ...
-            if (isset($meta['key'])) {
+            // --- FIX IMPORTANTE: Aggiunto is_string() ---
+            // Processiamo il valore SOLO se esiste, non è vuoto E SOPRATTUTTO è una stringa.
+            if (isset($meta['key']) && !empty($meta['value']) && is_string($meta['value'])) {
+                
+                $val = trim($meta['value']);
+                
                 switch ($meta['key']) {
-                    case 'billing_cf': case '_billing_cf':
-                        $cf = strtoupper(trim($meta['value'])); break;
-                    case 'billing_piva': case '_billing_piva':
-                        $piva = strtoupper(trim($meta['value'])); break;
-                    case 'billing_pec': case '_billing_pec':
-                        $pec = trim($meta['value']); break;
-                    case 'billing_sdi': case '_billing_sdi':
-                        $sdi = strtoupper(trim($meta['value'])); break;
+                    // --- CODICE FISCALE ---
+                    case 'billing_cf':
+                    case '_billing_cf':
+                    case 'cf_user':
+                    case 'billing_business_cf':
+                        $cf = strtoupper($val);
+                        break;
                         
-                    case 'bacs_date': case '_bacs_date':
-                        $dObj = DateTime::createFromFormat('d/m/Y', $meta['value']);
-                        $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $meta['value'];
+                        // --- PARTITA IVA ---
+                    case 'billing_piva':
+                    case '_billing_piva':
+                    case 'piva_user':
+                        $piva = strtoupper($val);
+                        break;
+                        
+                        // --- PEC ---
+                    case 'billing_pec':
+                    case '_billing_pec':
+                        $pec = $val;
+                        break;
+                        
+                        // --- CODICE SDI ---
+                    case 'billing_sdi':
+                    case '_billing_sdi':
+                    case 'billing_codiceunivoco':
+                        $sdi = strtoupper($val);
+                        break;
+                        
+                        // --- DATA BONIFICO ---
+                    case 'bacs_date':
+                    case '_bacs_date':
+                        $dObj = DateTime::createFromFormat('d/m/Y', $val);
+                        $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $val;
                         break;
                 }
             }
         }
+        
+        // Fallback data bonifico
         if (empty($dataBonifico)) { $dataBonifico = $orderData['date_created']; }
         
-        // Costruzione Array (Usa le variabili pulite sopra)
+        // 3. COSTRUZIONE ARRAY FINALE
         $cliente = [];
         $cliente[0] = [
-            'nome'       => $nome,           // <--- DATO PULITO
+            'nome'       => $nome,
             'email'      => $billing['email'],
-            'Rag'        => $ragioneSociale, // <--- DATO PULITO
+            'Rag'        => $ragioneSociale,
             'CF'         => $cf,
             'partitaiva' => $piva,
-            'fattind'    => $indirizzo,      // <--- DATO PULITO
-            'fattcomune' => $citta,          // <--- DATO PULITO
+            'fattind'    => $indirizzo,
+            'fattcomune' => $citta,
             'fattcap'    => $billing['postcode'],
             'fattprov'   => $billing['state'],
             'telefono'   => $billing['phone'],
@@ -229,17 +244,13 @@ class UserController extends BaseController
             $idnumber_sap = $config::WOOCOMMERCE_INSTANCES[$paymentDetails['mdl']]['idnumber_sap'];
         }
         
-        // =================================================================
-        // 2. CHIAMATA ANCHE PER IL PRODOTTO (Importante per il PDF)
-        // =================================================================
-        $rawItemName = $orderData['line_items'][0]['name'];
-        
-        // Pulisce il nome del corso/prodotto
+        // Recupero nome prodotto
+        $rawItemName = $orderData['line_items'][0]['name'] ?? 'Corso';
         $cleanItemName = $this->sanitizeString($rawItemName);
         
         $cliente[1] = [
             'cost'          => $paymentDetails['cost'],
-            'fullname'      => $cleanItemName, // <--- DATO PULITO
+            'fullname'      => $cleanItemName,
             'idnumber'      => $idnumber_sap,
             'datapagamento' => $dataBonifico
         ];
@@ -1145,7 +1156,7 @@ class UserController extends BaseController
             $pdf->logo('it');
             $pdf->addSociete("Sede Legale", $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . $this->userMoodle['0']['fattcomune'] . " " . $this->userMoodle['0']['fattprov'] . "\nITALY");
             
-            $pdf->fact_dev("Fattura di Vendita N°:", $this->datiInvoice['docnum'] . " ");
+            $pdf->fact_dev("Fattura di Vendita N.:", $this->datiInvoice['docnum'] . " ");
             
             $pdf->addShip("\nData emissione " . $this->datiInvoice['data2'] . "\n\nSpett.le\n" . strtoupper($this->userMoodle['0']['Rag']) . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . $this->userMoodle['0']['fattcomune'] . " " . $this->userMoodle['0']['fattprov'] . "\nITALY");
             
