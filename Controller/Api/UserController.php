@@ -33,6 +33,19 @@ class UserController extends BaseController
         
         // 1. Recupera i dati base dalla tabella 'moodle_payments'.
         $this->arrQueryStringParams = $this->getQueryStringParams();
+        
+        // --- FIX ANTI-DUPLICATI (INSERIRE QUI) ---
+        // Controllo preventivo: Se sales è già 1, mi fermo subito!
+        $dbCheck = new UserModel('mdlapps_moodleadmin');
+        $recordStatus = $dbCheck->select("SELECT sales, logfile FROM moodle_payments WHERE id=" . $this->arrQueryStringParams["id"]);
+        
+        if (!empty($recordStatus) && $recordStatus[0]['sales'] == '1') {
+            $logger->log("STOP: Ordine " . $this->arrQueryStringParams["id"] . " già processato (sales=1). Blocco esecuzione duplicata.");
+            echo "Ordine già processato.";
+            return true; // Esco facendo finta che sia andato tutto bene
+        }
+        // --- FINE FIX ---
+        
         $paymentDetails = $this->getMoodlePayments($this->arrQueryStringParams["id"]);
         $this->arrQueryStringParams = $paymentDetails; // Mantiene la compatibilità
         $logger->dump($this->arrQueryStringParams);
@@ -41,18 +54,6 @@ class UserController extends BaseController
             // 2. GET dei dati da WooCommerce tramite API
             $wcModel = new WooCommerceModel($paymentDetails['mdl']);
             $orderData = $wcModel->getOrderById($paymentDetails['payment_id']);
-            
-            // --- INIZIO SONDA DI VERIFICA ---
-            echo "<h3>--- DEBUG DATO GREZZO ESTRATTO ---</h3>";
-            echo "<pre>";
-            // Stampiamo il nome e cognome come escono dalla query, e anche la codifica rilevata
-            $nomeGrezzo = $orderData['billing']['first_name'] . ' ' . $orderData['billing']['last_name'];
-            var_dump($nomeGrezzo);
-            echo "Encoding rilevato: " . mb_detect_encoding($nomeGrezzo, 'UTF-8, ISO-8859-1', true);
-            echo "\nHex Dump: " . bin2hex($nomeGrezzo); // Vediamo i byte reali
-            echo "</pre>";
-            // die("--- STOP VERIFICA ---");
-            // --- FINE SONDA ---
             
             if (!$orderData) {
                 $logger->log("Errore: Impossibile recuperare i dati dell'ordine " . $paymentDetails['payment_id'] . " da WooCommerce.");
@@ -238,11 +239,40 @@ class UserController extends BaseController
             'IPACodePA'  => $sdi
         ];
         
-        $config = new costanti();
         $idnumber_sap = '';
-        if (isset($config::WOOCOMMERCE_INSTANCES[$paymentDetails['mdl']]['idnumber_sap'])) {
-            $idnumber_sap = $config::WOOCOMMERCE_INSTANCES[$paymentDetails['mdl']]['idnumber_sap'];
+        // -----------------------------------------------------------
+        // GESTIONE SKU (CODICE ARTICOLO SAP) - MODALITÀ RIGIDA
+        // -----------------------------------------------------------
+        $idnumber_sap = '';
+        
+        // 1. Cerchiamo lo SKU nel primo articolo dell'ordine
+        // (Usa null coalescing operator '??' per evitare errori se la chiave non esiste)
+        $skuTrovato = $orderData['line_items'][0]['sku'] ?? '';
+        
+        if (!empty($skuTrovato)) {
+            // A. CASO OK: SKU Trovato
+            $idnumber_sap = trim($skuTrovato);
+        } else {
+            // B. CASO ERRORE: SKU Mancante -> BLOCCO TUTTO
+            $logger = Logger::get_logger();
+            $wcOrderId = $orderData['id'] ?? 'N/D';
+            
+            $msgErrore = "ERRORE BLOCCANTE: L'ordine WooCommerce #$wcOrderId non ha un COD (SKU) impostato nel prodotto. " .
+            "Impossibile determinare il codice articolo per SAP. La procedura è stata interrotta.";
+            
+            $logger->log($msgErrore);
+            
+            // Invio Email di Allarme
+            $this->emailMessagge([
+                'oggetto'      => 'ERRORE SAP: SKU Mancante Ordine #' . $wcOrderId,
+                'destinatario' => 'system',
+                'messaggio'    => $msgErrore . "<br><br><b>Azione Richiesta:</b><br>1. Vai su WooCommerce.<br>2. Apri il prodotto acquistato.<br>3. Inserisci il codice SAP nel campo 'COD (SKU)'.<br>4. Rilancia l'importazione."
+            ]);
+            
+            // STOP ESECUZIONE
+            exit();
         }
+        // -----------------------------------------------------------
         
         // Recupero nome prodotto
         $rawItemName = $orderData['line_items'][0]['name'] ?? 'Corso';

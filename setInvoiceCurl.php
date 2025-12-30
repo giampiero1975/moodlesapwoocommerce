@@ -16,6 +16,27 @@ try {
     #die();
     $url=null;
     foreach ($enrol_paypal as $keyEnrol) {
+        // --- INIZIO FIX ANTI-DUPLICATI ---
+        $current_id = $keyEnrol['id'];
+        
+        // 1. PRIMA di fare qualsiasi cosa, proviamo a "prenotare" questo ID sul database.
+        //    Usiamo un update diretto. Se logfile NON è null (quindi qualcun altro lo sta facendo),
+        //    la query non aggiornerà nessuna riga.
+        $sql_lock = "UPDATE moodle_payments SET logfile = 'IN_CORSO_LOCK' WHERE id = '$current_id' AND logfile IS NULL";
+        
+        // ATTENZIONE: Qui devi usare il metodo della tua classe per eseguire query di Update.
+        // Se la tua classe DBMoodle ha un metodo ->query() o ->execute(), usalo qui.
+        // Esempio generico:
+        $moodle->query($sql_lock);
+        
+        // 2. CONTROLLO FONDAMENTALE: Abbiamo aggiornato davvero la riga?
+        //    Se affected_rows è 0, significa che logfile NON era null (qualcun altro lo ha preso).
+        if ($moodle->affected_rows == 0) {
+            echo "\n" . date("H:i:s") . " ID $current_id saltato: già in lavorazione da un altro processo.";
+            continue; // SALTA SUBITO AL PROSSIMO ELEMENTO DEL CICLO
+        }
+        // --- FINE FIX ---
+        
         $url = "http://moodlesapwoocommerce.metmi.lan/index.php/sap/ins?"; # url di ese
         $url .= "id=" . $keyEnrol['id'];
         #echo "<br>".$url;
