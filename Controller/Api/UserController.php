@@ -253,24 +253,28 @@ class UserController extends BaseController
             // A. CASO OK: SKU Trovato
             $idnumber_sap = trim($skuTrovato);
         } else {
-            // B. CASO ERRORE: SKU Mancante -> BLOCCO TUTTO
+            // 2. ERRORE: SKU Mancante -> Logghiamo anche il NOME DEL CORSO
             $logger = Logger::get_logger();
+            
             $wcOrderId = $orderData['id'] ?? 'N/D';
+            // Recuperiamo il nome del corso dall'array dei prodotti
+            $nomeCorso = $orderData['line_items'][0]['name'] ?? 'NOME CORSO NON TROVATO';
             
-            $msgErrore = "ERRORE BLOCCANTE: L'ordine WooCommerce #$wcOrderId non ha un COD (SKU) impostato nel prodotto. " .
-            "Impossibile determinare il codice articolo per SAP. La procedura è stata interrotta.";
+            // Log più leggibile
+            $msgLog = "ERRORE BLOCCANTE: SKU mancante! Ordine #$wcOrderId - Corso: '$nomeCorso'";
+            $logger->log($msgLog);
             
-            $logger->log($msgErrore);
-            
-            // Invio Email di Allarme
+            // Mail più utile
             $this->emailMessagge([
-                'oggetto'      => 'ERRORE SAP: SKU Mancante Ordine #' . $wcOrderId,
+                'oggetto' => "Errore SKU Mancante - Ordine #$wcOrderId",
                 'destinatario' => 'system',
-                'messaggio'    => $msgErrore . "<br><br><b>Azione Richiesta:</b><br>1. Vai su WooCommerce.<br>2. Apri il prodotto acquistato.<br>3. Inserisci il codice SAP nel campo 'COD (SKU)'.<br>4. Rilancia l'importazione."
+                'messaggio' => "Impossibile processare l'ordine WooCommerce <b>#$wcOrderId</b>.<br>" .
+                "Corso: <b>$nomeCorso</b><br><br>" .
+                "Motivo: <b>Campo COD (SKU) vuoto nel prodotto.</b><br>" .
+                "Azione: Vai su WooCommerce, cerca il prodotto '$nomeCorso' e inserisci il codice SAP."
             ]);
             
-            // STOP ESECUZIONE
-            exit();
+            return false;
         }
         // -----------------------------------------------------------
         
