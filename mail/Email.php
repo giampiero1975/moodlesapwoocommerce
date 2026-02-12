@@ -301,61 +301,81 @@ class Email
      *
      * @return bool
      */
+    /**
+     * Send email to recipient via mail server
+     *
+     * @return bool
+     */
     public function send()
     {
         $message = null;
-        $this->socket = fsockopen(
-            $this->getServer(),
-            $this->port,
+        
+        // --- MODIFICA PER ACCETTARE CERTIFICATI (COME THUNDERBIRD) ---
+        $contextOptions = [
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true
+            ]
+        ];
+        $context = stream_context_create($contextOptions);
+        
+        $remote_socket = ($this->protocol) ? $this->protocol . '://' . $this->server : $this->server;
+        $remote_socket .= ':' . $this->port;
+        
+        $this->socket = stream_socket_client(
+            $remote_socket,
             $errorNumber,
             $errorMessage,
-            $this->connectionTimeout
-        );
-
+            $this->connectionTimeout,
+            STREAM_CLIENT_CONNECT,
+            $context
+            );
+        // --- FINE MODIFICA ---
+        
         if (empty($this->socket)) {
             return false;
         }
-
+        
         $this->logs['CONNECTION'] = $this->getResponse();
         $this->logs['HELLO'][1] = $this->sendCommand('EHLO ' . $this->hostname);
-
+        
         if ($this->isTLS) {
             $this->logs['STARTTLS'] = $this->sendCommand('STARTTLS');
+            // Attiviamo la crittografia sul socket
             stream_socket_enable_crypto($this->socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
             $this->logs['HELLO'][2] = $this->sendCommand('EHLO ' . $this->hostname);
         }
-
+        
         $this->logs['AUTH'] = $this->sendCommand('AUTH LOGIN');
         $this->logs['USERNAME'] = $this->sendCommand(base64_encode($this->username));
         $this->logs['PASSWORD'] = $this->sendCommand(base64_encode($this->password));
         $this->logs['MAIL_FROM'] = $this->sendCommand('MAIL FROM: <' . $this->from[0] . '>');
-
+        
         $recipients = array_merge($this->to, $this->cc, $this->bcc);
         foreach ($recipients as $address) {
             $this->logs['RECIPIENTS'][] = $this->sendCommand('RCPT TO: <' . $address[0] . '>');
         }
-
+        
         $this->setHeader('Date', date('r'));
         $this->setHeader('Subject', $this->subject);
         $this->setHeader('From', $this->formatAddress($this->from));
         $this->setHeader('Return-Path', $this->formatAddress($this->from));
         $this->setHeader('To', $this->formatAddressList($this->to));
-
+        
         if (!empty($this->replyTo)) {
             $this->setHeader('Reply-To', $this->formatAddressList($this->replyTo));
         }
-
         if (!empty($this->cc)) {
             $this->setHeader('Cc', $this->formatAddressList($this->cc));
         }
-
         if (!empty($this->bcc)) {
             $this->setHeader('Bcc', $this->formatAddressList($this->bcc));
         }
-
+        
         $boundary = md5(uniqid(microtime(true), true));
         $this->setHeader('Content-Type', 'multipart/mixed; boundary="mixed-' . $boundary . '"');
-
+        
         if (!empty($this->attachments)) {
             $this->headers['Content-Type'] = 'multipart/mixed; boundary="mixed-' . $boundary . '"';
             $message .= '--mixed-' . $boundary . self::CRLF;
@@ -363,23 +383,23 @@ class Email
         } else {
             $this->headers['Content-Type'] = 'multipart/alternative; boundary="alt-' . $boundary . '"';
         }
-
+        
         if (!empty($this->textMessage)) {
             $message .= '--alt-' . $boundary . self::CRLF;
             $message .= 'Content-Type: text/plain; charset=' . $this->charset . self::CRLF;
             $message .= 'Content-Transfer-Encoding: base64' . self::CRLF . self::CRLF;
             $message .= chunk_split(base64_encode($this->textMessage)) . self::CRLF;
         }
-
+        
         if (!empty($this->htmlMessage)) {
             $message .= '--alt-' . $boundary . self::CRLF;
             $message .= 'Content-Type: text/html; charset=' . $this->charset . self::CRLF;
             $message .= 'Content-Transfer-Encoding: base64' . self::CRLF . self::CRLF;
             $message .= chunk_split(base64_encode($this->htmlMessage)) . self::CRLF;
         }
-
+        
         $message .= '--alt-' . $boundary . '--' . self::CRLF . self::CRLF;
-
+        
         if (!empty($this->attachments)) {
             foreach ($this->attachments as $attachment) {
                 $filename = pathinfo($attachment, PATHINFO_BASENAME);
@@ -388,32 +408,28 @@ class Email
                 if (!$type) {
                     $type = 'application/octet-stream';
                 }
-
+                
                 $message .= '--mixed-' . $boundary . self::CRLF;
                 $message .= 'Content-Type: ' . $type . '; name="' . $filename . '"' . self::CRLF;
                 $message .= 'Content-Disposition: attachment; filename="' . $filename . '"' . self::CRLF;
                 $message .= 'Content-Transfer-Encoding: base64' . self::CRLF . self::CRLF;
                 $message .= chunk_split(base64_encode($contents)) . self::CRLF;
             }
-
             $message .= '--mixed-' . $boundary . '--';
         }
-
+        
         $headers = '';
         foreach ($this->headers as $k => $v) {
             $headers .= $k . ': ' . $v . self::CRLF;
         }
-
-        $this->logs['MESSAGE'] = $message;
-        $this->logs['HEADERS'] = $headers;
+        
         $this->logs['DATA'][1] = $this->sendCommand('DATA');
         $this->logs['DATA'][2] = $this->sendCommand($headers . self::CRLF . $message . self::CRLF . '.');
         $this->logs['QUIT'] = $this->sendCommand('QUIT');
         fclose($this->socket);
-
+        
         return substr($this->logs['DATA'][2], 0, 3) == self::OK;
     }
-
     /**
      * Get server url
      * -- if set SMTP protocol then prepend it to server

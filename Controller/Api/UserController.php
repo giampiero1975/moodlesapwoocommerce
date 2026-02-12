@@ -14,84 +14,106 @@ require_once PROJECT_ROOT_PATH . 'Model/WooCommerceModel.php';
 #[\AllowDynamicProperties]
 class UserController extends BaseController
 {
+
     // ===================================================================
     // METODI NUOVI O MODIFICATI PER LA VERSIONE 2.0
     // ===================================================================
-    
+
     /**
      * V2.0: Metodo principale per inserire la fattura in SAP.
      * Recupera i dati da WooCommerce invece che da Moodle.
      */
     public $tipodoc;
-    
+
     public function insInvoice()
     {
         $logger = Logger::get_logger();
         $this->nome_log = $logger->logname;
         $logger->do_write("\nmethod: " . __METHOD__);
         $config = new costanti();
-        
+
         // 1. Recupera i dati base dalla tabella 'moodle_payments'.
         $this->arrQueryStringParams = $this->getQueryStringParams();
-        
+
         // --- FIX ANTI-DUPLICATI (INSERIRE QUI) ---
         // Controllo preventivo: Se sales è già 1, mi fermo subito!
-        $dbCheck = new UserModel('mdlapps_moodleadmin');
-        $recordStatus = $dbCheck->select("SELECT sales, logfile FROM moodle_payments WHERE id=" . $this->arrQueryStringParams["id"]);
-        
-        if (!empty($recordStatus) && $recordStatus[0]['sales'] == '1') {
-            $logger->log("STOP: Ordine " . $this->arrQueryStringParams["id"] . " già processato (sales=1). Blocco esecuzione duplicata.");
-            echo "Ordine già processato.";
-            return true; // Esco facendo finta che sia andato tutto bene
-        }
+        /*
+         * $dbCheck = new UserModel('mdlapps_moodleadmin');
+         * $recordStatus = $dbCheck->select("SELECT sales, logfile FROM moodle_payments WHERE id=" . $this->arrQueryStringParams["id"]);
+         *
+         * if (!empty($recordStatus) && $recordStatus[0]['sales'] == '1') {
+         * $logger->log("STOP: Ordine " . $this->arrQueryStringParams["id"] . " già processato (sales=1). Blocco esecuzione duplicata.");
+         * echo "Ordine già processato.";
+         * return true; // Esco facendo finta che sia andato tutto bene
+         * }
+         */
         // --- FINE FIX ---
-        
+
         $paymentDetails = $this->getMoodlePayments($this->arrQueryStringParams["id"]);
         $this->arrQueryStringParams = $paymentDetails; // Mantiene la compatibilità
         $logger->dump($this->arrQueryStringParams);
-        
+
         try {
             // 2. GET dei dati da WooCommerce tramite API
             $wcModel = new WooCommerceModel($paymentDetails['mdl']);
             $orderData = $wcModel->getOrderById($paymentDetails['payment_id']);
-            
-            if (!$orderData) {
+
+            if (! $orderData) {
                 $logger->log("Errore: Impossibile recuperare i dati dell'ordine " . $paymentDetails['payment_id'] . " da WooCommerce.");
-                $this->emailMessagge(['oggetto' => 'Errore API WooCommerce', 'destinatario' => 'system', 'messaggio' => "Impossibile recuperare dati per ordine WC " . $paymentDetails['payment_id']]);
+                $this->emailMessagge([
+                    'oggetto' => 'Errore API WooCommerce',
+                    'destinatario' => 'system',
+                    'messaggio' => "Impossibile recuperare dati per ordine WC " . $paymentDetails['payment_id']
+                ]);
                 exit();
             }
-            
+
             // 3. Mappa i dati di WooCommerce nella struttura dati attesa ($this->userMoodle)
             $this->userMoodle = $this->mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails);
             $logger->log("Dati mappati da WooCommerce:");
             $logger->dump($this->userMoodle);
+            if ($this->userMoodle === false) {
+                // Esci senza fare danni
+                return;
+            }
             
+            if ($orderData) {
+                // CHIAMATA AL WRAPPER SINTETICO
+                $sintesi = $wcModel->getSyntheticOrder($orderData);
+
+                $logger->log("--- VERIFICA SINTETICA ORDINE ---");
+                $logger->dump($sintesi);
+
+                // Procedi con il mapping...
+            }
         } catch (Exception $e) {
             $logger->log("Errore critico durante la comunicazione con WooCommerce: " . $e->getMessage());
-            $this->emailMessagge(['oggetto' => 'Errore Configurazione WooCommerce', 'destinatario' => 'system', 'messaggio' => "Errore WooCommerceModel: " . $e->getMessage()]);
+            $this->emailMessagge([
+                'oggetto' => 'Errore Configurazione WooCommerce',
+                'destinatario' => 'system',
+                'messaggio' => "Errore WooCommerceModel: " . $e->getMessage()
+            ]);
             exit();
         }
-        
-        // Da qui il flusso prosegue utilizzando la logica esistente
-        
+
         # GET sap
         if (! $this->BPSAP = $this->getSapUser())
             exit();
-        
+
         # Verifico allineamento utente SAP/Cliente
         if (! $this->checkAlignUser = $this->alignUser())
             exit();
-            
+
         # GET sap e verifico articolo
         if (! $this->sapArticle = $this->getSapArticle())
             exit();
-            // ---- AGGIUNGI QUESTO LOG ----
-            $logger->log("FASE: Articolo SAP recuperato con successo.");
-            // -----------------------------
-        
+        // ---- AGGIUNGI QUESTO LOG ----
+        $logger->log("FASE: Articolo SAP recuperato con successo.");
+        // -----------------------------
+
         # Configurazione costi e bollo
         $this->getCostInv();
-                    
+
         # Genero fattura
         $this->tipo = $this->arrQueryStringParams['tipo'];
         $this->tipodoc = 'invoice';
@@ -99,59 +121,58 @@ class UserController extends BaseController
             $array = [
                 'oggetto' => $config::WOOCOMMERCE_INSTANCES[$this->arrQueryStringParams['mdl']]['url'], // Usa un nome appropriato
                 'destinatario' => 'system',
-                'messaggio' => "Problemi inserimento la fattura per ".$this->userMoodle['0']['nome']
-                ];
+                'messaggio' => "Problemi inserimento la fattura per " . $this->userMoodle['0']['nome']
+            ];
             $this->emailMessagge($array);
             return false;
         } else {
             $this->mdl = $this->arrQueryStringParams['mdl'];
             $this->userid = $this->arrQueryStringParams['userid'];
             $this->courseid = $this->arrQueryStringParams['courseid'];
-            
+
             $userModel = new dbmoodle('mdlapps_moodleadmin');
             $sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`,`nfattura`)" . " VALUES ('" . $this->arrQueryStringParams['mdl'] . "'," . $this->arrQueryStringParams['userid'] . ", " . $this->arrQueryStringParams['courseid'] . ",'" . $this->BPSAP['cardcode'] . "','" . $this->BPSAP['cardname'] . "','" . $this->BPSAP['AddId'] . "','" . $this->BPSAP['partitaiva'] . "','" . $this->datiInvoice['docnum'] . "');";
-            
+
             if (! $userModel->create($sql)) {
                 $logger->log("problemi inserendo la fattura: " . $sql);
                 return false;
             }
-            
+
             $sql = "UPDATE `moodle_payments` set sales='1' WHERE id='" . $this->arrQueryStringParams['id'] . "';";
             if (! $userModel->create($sql)) {
                 $logger->log("problemi aggiornando i pagamenti paypal: " . $sql);
                 return false;
             }
-            
-               }
-                    
-               // genero fattura pdf
-               if (! $this->invoicePdf()) {
-                   $logger->log("problemi generando la fattura PDF");
-                   $array = [
-                       'destinatario' => 'system',
-                       'messaggio' => "problemi generando la fattura PDF"
-                   ];
-                   
-                   $this->emailMessagge($array);
-                   return false;
-               }
-                    
-               // inserisco incasso
-               $this->tipodoc = 'profit';
-               if (! $this->incasso()) {
-                   $logger->log("problemi inserendo l'incasso");
-                   $array = [
-                       'oggetto' => $config::MAILBOXES[$this->arrQueryStringParams['mdl']]['corso'],
-                       'destinatario' => 'system',
-                       'messaggio' => "problemi inserendo l'incasso"
-                   ];
-                   
-                   $this->emailMessagge($array);
-                   return false;
-               }
-                    return TRUE;
+        }
+
+        // genero fattura pdf
+        if (! $this->invoicePdf()) {
+            $logger->log("problemi generando la fattura PDF");
+            $array = [
+                'destinatario' => 'system',
+                'messaggio' => "problemi generando la fattura PDF"
+            ];
+
+            $this->emailMessagge($array);
+            return false;
+        }
+
+        // inserisco incasso
+        $this->tipodoc = 'profit';
+        if (! $this->incasso()) {
+            $logger->log("problemi inserendo l'incasso");
+            $array = [
+                'oggetto' => $config::MAILBOXES[$this->arrQueryStringParams['mdl']]['corso'],
+                'destinatario' => 'system',
+                'messaggio' => "problemi inserendo l'incasso"
+            ];
+
+            $this->emailMessagge($array);
+            return false;
+        }
+        return TRUE;
     }
-    
+
     /**
      * V2.0: Nuovo metodo "TRADUTTORE" (MAPPER)
      * Converte i dati ricevuti dall'API di WooCommerce nella vecchia struttura dati.
@@ -159,180 +180,177 @@ class UserController extends BaseController
     /**
      * VERSIONE FIX ARRAY: Salta i campi array che mandano in crash trim()
      */
-    private function mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails) {
-        $billing = $orderData["billing"];
-        
-        // 1. PULIZIA DATI ANAGRAFICI BASE
-        $nome = $this->sanitizeString($billing['first_name'] . ' ' . $billing['last_name']);
-        $indirizzo = $this->sanitizeString($billing['address_1']);
-        $citta = $this->sanitizeString($billing['city']);
-        $azienda = $this->sanitizeString($billing['company']);
-        
-        $ragioneSociale = !empty($azienda) ? $azienda : $nome;
-        
-        // 2. RECUPERO METADATI (CF, PIVA, PEC, SDI)
-        $cf = ''; $piva = ''; $pec = ''; $sdi = ''; $dataBonifico = '';
-        
-        foreach ($orderData['meta_data'] as $meta) {
-            // --- FIX IMPORTANTE: Aggiunto is_string() ---
-            // Processiamo il valore SOLO se esiste, non è vuoto E SOPRATTUTTO è una stringa.
-            if (isset($meta['key']) && !empty($meta['value']) && is_string($meta['value'])) {
-                
-                $val = trim($meta['value']);
-                
-                switch ($meta['key']) {
-                    // --- CODICE FISCALE ---
-                    case 'billing_cf':
-                    case '_billing_cf':
-                    case 'cf_user':
-                    case 'billing_business_cf':
-                        $cf = strtoupper($val);
-                        break;
-                        
-                        // --- PARTITA IVA ---
-                    case 'billing_piva':
-                    case '_billing_piva':
-                    case 'piva_user':
-                        $piva = strtoupper($val);
-                        break;
-                        
-                        // --- PEC ---
-                    case 'billing_pec':
-                    case '_billing_pec':
-                        $pec = $val;
-                        break;
-                        
-                        // --- CODICE SDI ---
-                    case 'billing_sdi':
-                    case '_billing_sdi':
-                    case 'billing_codiceunivoco':
-                        $sdi = strtoupper($val);
-                        break;
-                        
-                        // --- DATA BONIFICO ---
-                    case 'bacs_date':
-                    case '_bacs_date':
-                        $dObj = DateTime::createFromFormat('d/m/Y', $val);
-                        $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $val;
-                        break;
-                }
-            }
-        }
-        
-        // Fallback data bonifico
-        if (empty($dataBonifico)) { $dataBonifico = $orderData['date_created']; }
-        
-        // 3. COSTRUZIONE ARRAY FINALE
-        $cliente = [];
-        $cliente[0] = [
-            'nome'       => $nome,
-            'email'      => $billing['email'],
-            'Rag'        => $ragioneSociale,
-            'CF'         => $cf,
-            'partitaiva' => $piva,
-            'fattind'    => $indirizzo,
-            'fattcomune' => $citta,
-            'fattcap'    => $billing['postcode'],
-            'fattprov'   => $billing['state'],
-            'telefono'   => $billing['phone'],
-            'PEC'        => $pec,
-            'IPACodePA'  => $sdi
-        ];
-        
-        $idnumber_sap = '';
-        // -----------------------------------------------------------
-        // GESTIONE SKU (CODICE ARTICOLO SAP) - MODALITÀ RIGIDA
-        // -----------------------------------------------------------
-        $idnumber_sap = '';
-        
-        // 1. Cerchiamo lo SKU nel primo articolo dell'ordine
-        // (Usa null coalescing operator '??' per evitare errori se la chiave non esiste)
-        $skuTrovato = $orderData['line_items'][0]['sku'] ?? '';
-        
-        if (!empty($skuTrovato)) {
-            // A. CASO OK: SKU Trovato
-            $idnumber_sap = trim($skuTrovato);
-        } else {
-            // 2. ERRORE: SKU Mancante -> Logghiamo anche il NOME DEL CORSO
+    /**
+     * V2.0: Nuovo metodo "TRADUTTORE" (MAPPER) DINAMICO
+     * Converte i dati ricevuti dall'API di WooCommerce nella struttura dati attesa,
+     * gestendo dinamicamente bolli e priorità fiscale Azienda/Privato.
+     */
+    private function mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails)
+    {
+        $billingRaw = $orderData["billing"];
+        $billing = array_map(function ($value) {
+            return is_string($value) ? strtoupper($this->sanitizeString($value)) : $value;
+        }, $billingRaw);
+            
             $logger = Logger::get_logger();
             
-            $wcOrderId = $orderData['id'] ?? 'N/D';
-            // Recuperiamo il nome del corso dall'array dei prodotti
-            $nomeCorso = $orderData['line_items'][0]['name'] ?? 'NOME CORSO NON TROVATO';
+            // 1. PULIZIA DATI ANAGRAFICI BASE
+            $nome = $this->sanitizeString(($billing['first_name'] ?? '') . ' ' . ($billing['last_name'] ?? ''));
+            $indirizzo = $this->sanitizeString($billing['address_1'] ?? '');
+            $citta = $this->sanitizeString($billing['city'] ?? '');
+            $azienda = $this->sanitizeString($billing['company'] ?? '');
+            $ragioneSociale = !empty($azienda) ? $azienda : $nome;
             
-            // Log più leggibile
-            $msgLog = "ERRORE BLOCCANTE: SKU mancante! Ordine #$wcOrderId - Corso: '$nomeCorso'";
-            $logger->log($msgLog);
+            // 2. RECUPERO METADATI FISCALI
+            $cf_user = '';
+            $cf_business = '';
+            $piva = '';
+            $pec = '';
+            $sdi = '';
+            $dataBonifico = '';
             
-            // Mail più utile
-            $this->emailMessagge([
-                'oggetto' => "Errore SKU Mancante - Ordine #$wcOrderId",
-                'destinatario' => 'system',
-                'messaggio' => "Impossibile processare l'ordine WooCommerce <b>#$wcOrderId</b>.<br>" .
-                "Corso: <b>$nomeCorso</b><br><br>" .
-                "Motivo: <b>Campo COD (SKU) vuoto nel prodotto.</b><br>" .
-                "Azione: Vai su WooCommerce, cerca il prodotto '$nomeCorso' e inserisci il codice SAP."
-            ]);
+            foreach ($orderData['meta_data'] as $meta) {
+                if (isset($meta['key']) && !empty($meta['value']) && is_string($meta['value'])) {
+                    $val = trim($meta['value']);
+                    switch ($meta['key']) {
+                        case 'cf_user': $cf_user = strtoupper($val); break;
+                        case 'billing_business_cf':
+                        case 'billing_cf':
+                        case '_billing_cf': $cf_business = strtoupper($val); break;
+                        case 'billing_piva':
+                        case '_billing_piva':
+                        case 'piva_user': $piva = strtoupper($val); break;
+                        case 'billing_pec':
+                        case '_billing_pec': $pec = $val; break;
+                        case 'billing_sdi':
+                        case '_billing_sdi':
+                        case 'billing_codiceunivoco': $sdi = strtoupper($val); break;
+                        case 'bacs_date':
+                        case '_bacs_date':
+                            $dObj = DateTime::createFromFormat('d/m/Y', $val);
+                            $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $val;
+                            break;
+                    }
+                }
+            }
             
-            return false;
-        }
-        // -----------------------------------------------------------
-        
-        // Recupero nome prodotto
-        $rawItemName = $orderData['line_items'][0]['name'] ?? 'Corso';
-        $cleanItemName = $this->sanitizeString($rawItemName);
-        
-        $cliente[1] = [
-            'cost'          => $paymentDetails['cost'],
-            'fullname'      => $cleanItemName,
-            'idnumber'      => $idnumber_sap,
-            'datapagamento' => $dataBonifico
-        ];
-        
-        return $cliente;
+            // --- NUOVO CONTROLLO FISCALE SOFT (Senza die) ---
+            if (ctype_digit($cf_business) && strlen($cf_business) === 11 && empty($piva)) {
+                $logger->log("ALERT FISCALE: P.IVA [" . $cf_business . "] nel campo CF per ordine " . $orderData['id']);
+                
+                $array_error = [
+                    'oggetto' => 'Errore Dati Fiscali - P.IVA mancante',
+                    'destinatario' => 'moodle', // Verifica che il tuo metodo traduca 'system' in un'email reale
+                    'messaggio' => "Disallineamento utente " . $nome . " (ID: " . $orderData['id'] . "), valorizzazione P.IVA Billing mancante"
+                ];
+                
+                $this->emailMessagge($array_error);
+                
+                // Invece di die(), restituiamo false.
+                // Assicurati che in insInvoice() ci sia un controllo: if (!$this->userMoodle) return;
+                return false;
+            }
+            
+            // Proseguimento normale se il controllo passa
+            $cf_finale = !empty($cf_business) ? $cf_business : $cf_user;
+            if (empty($dataBonifico)) $dataBonifico = $orderData['date_created'];
+            
+            // 3. RECUPERO QUANTITÀ E COSTI
+            $costoNettoProdotto = 0;
+            $qtyProdotto = 1;
+            $prezzoUnitario = 0;
+            
+            if (!empty($orderData['line_items'])) {
+                $line = $orderData['line_items'][0];
+                $costoNettoProdotto = number_format($line['total'], 2, '.', '');
+                $qtyProdotto = $line['quantity'] ?? 1;
+                $prezzoUnitario = $line['price'] ?? ($costoNettoProdotto / $qtyProdotto);
+            }
+            
+            $feeBollo = 0;
+            if (!empty($orderData['fee_lines'])) {
+                foreach ($orderData['fee_lines'] as $fee) {
+                    if (strpos(strtolower($fee['name']), 'bollo') !== false) {
+                        $feeBollo = number_format($fee['amount'], 2, '.', '');
+                    }
+                }
+            }
+            
+            // 4. COSTRUZIONE ARRAY
+            $cliente = [];
+            $cliente[0] = [
+                'nome' => $nome,
+                'email' => $billing['email'] ?? '',
+                'Rag' => $ragioneSociale,
+                'CF' => $cf_finale,
+                'partitaiva' => $piva,
+                'fattind' => $indirizzo,
+                'fattcomune' => $citta,
+                'fattcap' => $billing['postcode'] ?? '',
+                'fattprov' => $billing['state'] ?? '',
+                'telefono' => $billing['phone'] ?? '',
+                'PEC' => $pec,
+                'IPACodePA' => $sdi
+            ];
+            
+            $idnumber_sap = $orderData['line_items'][0]['sku'] ?? '';
+            $itemName = $this->sanitizeString($orderData['line_items'][0]['name'] ?? 'Corso');
+            
+            $cliente[1] = [
+                'cost' => $costoNettoProdotto,
+                'fee_bollo' => $feeBollo,
+                'fullname' => $itemName,
+                'idnumber' => $idnumber_sap,
+                'datapagamento' => $dataBonifico,
+                'unit_price' => $prezzoUnitario,
+                'qty' => $qtyProdotto
+            ];
+            
+            return $cliente;
     }
-    
+
     // ===================================================================
     // METODI ORIGINALI (ORA RIpristinati)
     // ===================================================================
-    
-    public function getMoodlePayments($id){
+    public function getMoodlePayments($id)
+    {
         $this->payments_id = $id;
         $logger = Logger::get_logger();
-        $logger->log("Recupero record da moodle_payments per ID: ".$this->payments_id);
+        $logger->log("Recupero record da moodle_payments per ID: " . $this->payments_id);
         $payments = new UserModel('mdlapps_moodleadmin');
-        $paymentsFields = $payments->select('select * from moodle_payments where id='.$this->payments_id);
-        $logger->log("SQL: select * from moodle_payments where id=".$this->payments_id);
-        $payment=array();
-        
-        foreach ($paymentsFields as $paymentsField => $paymentsFieldsValue){
-            $payment['id']=$paymentsFieldsValue['id'];
-            $payment['payment_id']=$paymentsFieldsValue['payment_id'];
-            $payment['mdl']=$paymentsFieldsValue['mdl'];
-            $payment['courseid']=$paymentsFieldsValue['courseid'];
-            $payment['userid']=$paymentsFieldsValue['userid'];
-            $payment['cost']=number_format($paymentsFieldsValue['cost'], 2, '.', ',');
-            $payment['tipo']=$paymentsFieldsValue['method'];
+        $paymentsFields = $payments->select('select * from moodle_payments where id=' . $this->payments_id);
+        $logger->log("SQL: select * from moodle_payments where id=" . $this->payments_id);
+        $payment = array();
+
+        foreach ($paymentsFields as $paymentsField => $paymentsFieldsValue) {
+            $payment['id'] = $paymentsFieldsValue['id'];
+            $payment['payment_id'] = $paymentsFieldsValue['payment_id'];
+            $payment['mdl'] = $paymentsFieldsValue['mdl'];
+            $payment['courseid'] = $paymentsFieldsValue['courseid'];
+            $payment['userid'] = $paymentsFieldsValue['userid'];
+            $payment['cost'] = number_format($paymentsFieldsValue['cost'], 2, '.', ',');
+            $payment['tipo'] = $paymentsFieldsValue['method'];
         }
         return $payment;
     }
-    
-    public function getSapUser() {
+
+    public function getSapUser()
+    {
         try {
             $logger = Logger::get_logger();
             $logger->log("Recupero dati utenti da SAP");
             $userSap = new SapModel();
             $config = new costanti();
-            
+
             $logger->log("getSapUser: Cerco utente con CF: " . $this->userMoodle[0]['CF']);
-            
+
             if (! $this->clienteSap = $userSap->getUsers($this->userMoodle[0]['CF'])) {
                 $logger->log("Cliente " . $this->userMoodle[0]['Rag'] . " {" . $this->userMoodle[0]['CF'] . "} non presente su SAP. Tentativo di creazione.");
                 $this->tipodoc = 'bp';
                 $xml = $this->createXMLBP();
-                
+
                 $logger->log("getSapUser: XML per nuovo utente creato. Tento invio a SAP (sendWS)...");
-                
+
                 if ($this->sendWS($xml) == true) {
                     $logger->log("getSapUser: Utente creato con successo su SAP. Recupero i dati aggiornati.");
                     $this->clienteSap = $userSap->getUsers($this->userMoodle[0]['CF']);
@@ -347,26 +365,40 @@ class UserController extends BaseController
                     exit();
                 }
             }
-            
+
             $logger->log("getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:");
-            
+
             // --- INIZIO CORREZIONE: Pulizia dei dati SAP recuperati per Mojibake ---
             // Puliamo i campi di testo SAP più comuni
-            $bp_fields_to_clean = ['cardname', 'ShipToDef', 'BillToDef', 'NameAddressB', 'NameAddressS', 'Address', 'City', 'Prov', 'MailAddres', 'MailCity', 'MailProv'];
-            
-            foreach ($bp_fields_to_clean as $key) {
-                // $this->clienteSap è l'array con i dati SAP
-                if (isset($this->clienteSap[$key]) && is_string($this->clienteSap[$key])) {
-                    $value = $this->clienteSap[$key];
+            $bp_fields_to_clean = [
+                'cardname',
+                'ShipToDef',
+                'BillToDef',
+                'NameAddressB',
+                'NameAddressS',
+                'Address',
+                'City',
+                'Prov',
+                'MailAddres',
+                'MailCity',
+                'MailProv'
+            ];
+
+            // Invece di usare $bp_fields_to_clean (lista fissa), cicliamo su quello che SAP ha inviato
+            foreach ($this->clienteSap as $key => $value) {
+                // Puliamo solo se è una stringa e non è vuota
+                if (is_string($value) && ! empty($value)) {
                     // 1. Decodifica entità HTML
                     $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-                    // 2. Tenta di risolvere il Mojibake
+
+                    // 2. Tenta di risolvere il Mojibake (conversione encoding)
                     $value = mb_convert_encoding(mb_convert_encoding(mb_convert_encoding($value, 'ISO-8859-1', 'UTF-8'), 'UTF-8', 'ISO-8859-1'), 'UTF-8', 'ISO-8859-1');
+
                     $this->clienteSap[$key] = trim($value);
                 }
             }
             // --- FINE CORREZIONE ---
-            
+
             $logger->dump($this->clienteSap);
             return $this->clienteSap;
         } catch (Exception $e) {
@@ -376,32 +408,33 @@ class UserController extends BaseController
             return false;
         }
     }
-    
-    public function getSapArticle() {
+
+    public function getSapArticle()
+    {
         $logger = Logger::get_logger();
         $config = new costanti();
-        
+
         $logger->log("Recupero articolo SAP con idnumber: {$this->userMoodle[1]['idnumber']}");
         $userSap = new SapModel();
-        
+
         if (! $this->articoloSap = $userSap->getItem($this->userMoodle[1]['idnumber'])) {
             $logger->log("Problema recuperando l'articolo su SAP {$this->userMoodle[1]['idnumber']}");
             $array = [
                 'oggetto' => 'Errore Articolo SAP',
                 'destinatario' => 'sap',
                 'messaggio' => "Problema recuperando l'articolo su SAP con codice: {$this->userMoodle[1]['idnumber']}"
-                ];
-            
+            ];
+
             $this->emailMessagge($array);
             // Modificato per non uscire subito e permettere al flusso principale di gestire l'exit
             return false;
         }
-        
+
         $logger->log("Dump array articoloSap");
         $logger->dump($this->articoloSap);
         return $this->articoloSap;
     }
-    
+
     public function createXMLBP()
     {
         # print_r($this->userMoodle);
@@ -410,9 +443,9 @@ class UserController extends BaseController
         $userSap = new SapModel();
         // creo il nuovo cardcode
         $this->cardcode = $userSap->setCardCode();
-        
+
         ((! empty($this->userMoodle['0']['IPACodePA'])) ? $this->userMoodle['0']['IPACodePA'] : $this->userMoodle['0']['IPACodePA'] = "0000000");
-        
+
         $str = $this->userMoodle['0']['partitaiva'];
         $pattern = "/^[IT]{2}[0-9]{11}$/"; // Pattern standart
         if (preg_match($pattern, $str) == false && ! empty($this->userMoodle['0']['partitaiva'])) {
@@ -421,9 +454,9 @@ class UserController extends BaseController
                 $logger->log("{Partita iva} Moodle standardizzata [" . $this->userMoodle['0']['partitaiva'] . "] " . __METHOD__);
             }
         }
-        
+
         $logger->log("Generazione XML per nuovo BP");
-        
+
         $this->invxmlHeader = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
                                 <soapenv:Header/>
                                     <soapenv:Body>
@@ -431,15 +464,15 @@ class UserController extends BaseController
                                     <loc:reqType>set</loc:reqType>
                                     <loc:objType></loc:objType>
                                     <loc:docXml>';
-        
+
         $this->invxmlStart = '<BusinessPartner>';
-        
+
         $this->invxmlAdmInfo = '<RequestInfo>
                                     <requestUser>' . $config::USER . '</requestUser>
                                     <requestDataTime>' . date('Y-m-d h:m:s') . '</requestDataTime>
                                     <requestDB>' . $config::REQUESTDB . '</requestDB>
                                 </RequestInfo>';
-        
+
         $this->invxmlBP = '<Data>
                                 <codice>' . $this->cardcode . '</codice>
                                 <ragsoc>' . $this->userMoodle['0']['Rag'] . '</ragsoc>
@@ -509,37 +542,37 @@ class UserController extends BaseController
                                   </indirizzo>
                                 </indirizzi>
                         </Data>';
-        
+
         $this->invxmlEnd = '</BusinessPartner>';
-        
+
         $this->invxmlFooter = '</loc:docXml>
                               </loc:BOsync>
                               </soapenv:Body>
                               </soapenv:Envelope>';
-        
+
         $logger->log("XML Business Partner");
-        
+
         $invXmlBody = $this->invxmlStart;
         $invXmlBody .= $this->invxmlAdmInfo;
         $invXmlBody .= $this->invxmlBP;
         $invXmlBody .= $this->invxmlEnd;
-        
+
         $logger->log($invXmlBody);
-        
+
         // sostituzione slash tag per invio xml
         $tagOpen = '/</i';
         $tagClose = '/>/i';
         $invXmlBody = preg_replace($tagOpen, '&lt;', $invXmlBody);
         $invXmlBody = preg_replace($tagClose, '&gt;', $invXmlBody);
-        
+
         $invXml = $this->invxmlHeader;
         $invXml .= $invXmlBody;
         $invXml .= $this->invxmlFooter;
-        
+
         $logger->log($invXml);
         return $invXml;
     }
-    
+
     public function sendWS($xml, $docNum = null)
     {
         // passo il numero fattura in caso di check inserimento
@@ -548,13 +581,14 @@ class UserController extends BaseController
         $ws = new sendXml($xml);
         return $ws->sendSoap($this->tipodoc, $this->docNum);
     }
-    
+
     public function alignUser()
     {
         $logger = Logger::get_logger();
         $config = new costanti();
-        //$this->arrQueryStringParams = $this->getQueryStringParams();
-        
+
+        // $this->arrQueryStringParams = $this->getQueryStringParams();
+
         if (! $this->BPSAP) {
             $logger->log("implementazione -> SET BP SAP");
             echo "Utente SAP mancante";
@@ -563,14 +597,27 @@ class UserController extends BaseController
             # invio XMP
         } else {
             $allineamento = [];
+
+            // Esempio per Address B
+            if (strtoupper(trim($this->userMoodle['0']['Rag'])) != strtoupper(trim($this->BPSAP['NameAddressB']))) {
+                $logger->log("{Address B} disallineata");
+                $allineamento['B']['Address'] = strtoupper(trim($this->userMoodle['0']['Rag']));
+            }
+
+            // Esempio per Address S
+            if (strtoupper(trim($this->userMoodle['0']['Rag'])) != strtoupper(trim($this->BPSAP['NameAddressS']))) {
+                $logger->log("{Address S} disallineata");
+                $allineamento['S']['Address'] = strtoupper(trim($this->userMoodle['0']['Rag']));
+            }
+
             $logger->log("*** Utente esiste, verifico allineamento dati");
             # print_r($this->userMoodle);
             # print_r($this->BPSAP);
-            
+
             # check verifica dati fatturazione
             $logger->log("*** Verifica allineamento dati fatturazione");
             // echo "<br>Verifica allineamento dati fatturazione<br>";
-            
+
             /* check della piva */
             $str = $this->userMoodle['0']['partitaiva'];
             $pattern = "/^[IT]{2}[0-9]{11}$/"; // Pattern standart
@@ -587,20 +634,20 @@ class UserController extends BaseController
                         'destinatario' => 'moodle',
                         'messaggio' => "Partita IVA Moodle non valida [" . $str . "] per l'utente " . $this->userMoodle['0']['nome']
                     ];
-                    
+
                     $this->emailMessagge($array);
                     return 0;
                 }
             }
-            
+
             if ($this->userMoodle['0']['partitaiva'] != $this->BPSAP['partitaiva']) {
-                
+
                 $logger->log("{Partita iva} disallineata: " . $this->userMoodle['0']['partitaiva']);
                 $logger->log("*** Inserimento utente in SAP");
-                
+
                 $this->tipodoc = 'bp';
                 $this->XmlBp = $this->createXMLBP();
-                
+
                 if ($this->sendWS($this->XmlBp) == true) {
                     // allineo modalità di pagamento CBI dopo inserimento
                     $userSap = new SapModel();
@@ -613,32 +660,32 @@ class UserController extends BaseController
                         'destinatario' => 'system',
                         'messaggio' => "Errore inserimento BP {" . $this->userMoodle['0']['partitaiva'] . "} per l'utente " . $this->userMoodle['0']['nome']
                     ];
-                    
+
                     $this->emailMessagge($array);
                     return 0;
                 }
             }
-            
+
             // verifica codice fiscale
             $str = $this->userMoodle['0']['CF'];
             $pattern = "/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i"; // Pattern standart
             if (preg_match($pattern, $str) == false && ! empty($this->userMoodle['0']['CF'])) {
-                
+
                 $pattern = "/^[0-9]{11}$/"; // Pattern standart
                 if (preg_match($pattern, $str) == false) {
-                    
+
                     $logger->log("{Codice Fiscale} Moodle non valido!");
                     $array = [
                         'oggetto' => $config::MAILBOXES[$this->arrQueryStringParams['mdl']]['corso'],
                         'destinatario' => 'moodle',
                         'messaggio' => "Codice Fiscale Moodle non valido [" . $str . "] per l'utente " . $this->userMoodle['0']['nome']
                     ];
-                    
+
                     $this->emailMessagge($array);
                     return false;
                 }
             }
-            
+
             // imposto a default se mancante in moodle
             if ($this->userMoodle['0']['IPACodePA'] == '') {
                 # $logger->log("{IPACodePA} Moodle non presente");
@@ -652,77 +699,78 @@ class UserController extends BaseController
                         'destinatario' => 'moodle',
                         'messaggio' => "IPACodePA Moodle non valido [" . $this->userMoodle['0']['IPACodePA'] . "] per " . $this->userMoodle['0']['nome']
                     ];
-                    
+
                     $this->emailMessagge($array);
                     return 0;
                 }
-                
+
                 $logger->log("{IPACodePA} Moodle valido");
             }
-            
+
             # echo "{".$this->userMoodle['0']['PEC']."} {".$this->BPSAP['PEC']."}";
-            
+
             if ($this->userMoodle['0']['PEC'] != $this->BPSAP['PEC']) {
                 $logger->log("{PEC} disallineata");
                 $allineamento['U']['PECAddr'] = strtolower($this->userMoodle['0']['PEC']);
             }
-            
+
             if ($this->userMoodle['0']['Rag'] != $this->BPSAP['cardname'] && ! empty($this->userMoodle['0']['Rag'])) {
                 $logger->log("{CardName} disallineato");
                 $allineamento['U']['cardname'] = $this->userMoodle['0']['Rag'];
             }
-            
+
             if ($this->userMoodle['0']['Rag'] != $this->BPSAP['ShipToDef']) {
                 $logger->log("{ShipToDef} disallineato");
                 $allineamento['U']['ShipToDef'] = $this->userMoodle['0']['Rag'];
             }
-            
+
             if ($this->userMoodle['0']['Rag'] != $this->BPSAP['BillToDef']) {
                 $logger->log("{BillToDef} disallineato");
                 $allineamento['U']['BillToDef'] = $this->userMoodle['0']['Rag'];
             }
-            
+
             if ($this->userMoodle['0']['IPACodePA'] != $this->BPSAP['IPACodePA'] && ! empty($this->userMoodle['0']['IPACodePA'])) {
                 $logger->log("{IPACodePA} disallineata");
                 $allineamento['U']['IPACodePA'] = $this->userMoodle['0']['IPACodePA'];
             }
-            
-            if ($this->userMoodle['0']['Rag'] != $this->BPSAP['Name']) {
+
+            if ($this->userMoodle['0']['Rag'] != $this->BPSAP['cardname']) {
                 $logger->log("{Address} disallineata");
                 $allineamento['B']['Address'] = $this->userMoodle['0']['Rag'];
                 $allineamento['S']['Address'] = $this->userMoodle['0']['Rag'];
             }
-            
+
             if ($this->userMoodle['0']['fattind'] != $this->BPSAP['Address'] && ! empty($this->userMoodle['0']['fattind'])) {
                 $logger->log("{Street} disallineata");
                 $allineamento['B']['Street'] = $this->userMoodle['0']['fattind'];
             }
-            
+
             if ($this->userMoodle['0']['fattcomune'] != $this->BPSAP['City'] && ! empty($this->userMoodle['0']['fattcomune'])) {
                 $logger->log("{City} disallineata");
                 $allineamento['B']['city'] = $this->userMoodle['0']['fattcomune'];
             }
-            
+
             if ($this->userMoodle['0']['fattcap'] != $this->BPSAP['ZipCode'] && ! empty($this->userMoodle['0']['fattcap'])) {
                 $logger->log("{ZipCode} disallineata");
                 $allineamento['B']['ZipCode'] = $this->userMoodle['0']['fattcap'];
             }
-            
-            if ($this->userMoodle['0']['fattprov'] != $this->BPSAP['Prov'] && (!empty($this->userMoodle['0']['fattprov'] || $this->userMoodle['0']['fattprov']=="SEL"))) {
+
+            if ($this->userMoodle['0']['fattprov'] != $this->BPSAP['Prov'] && (! empty($this->userMoodle['0']['fattprov'] || $this->userMoodle['0']['fattprov'] == "SEL"))) {
                 $logger->log("{Prov} disallineata");
                 $allineamento['B']['State'] = $this->userMoodle['0']['fattprov'];
                 $allineamento['S']['State'] = $this->userMoodle['0']['fattprov'];
             }
-            
-            if ($this->userMoodle['0']['email'] != $this->BPSAP['E_Mail'] && ! empty($this->userMoodle['0']['email'])) {
+
+            // Confronto Case-Insensitive
+            if (strtolower($this->userMoodle['0']['email']) != strtolower($this->BPSAP['E_Mail']) && ! empty($this->userMoodle['0']['email'])) {
                 $logger->log("{E_Mail} disallineata");
-                $allineamento['U']['E_Mail'] = $this->userMoodle['0']['email'];
+                $allineamento['U']['E_Mail'] = strtolower($this->userMoodle['0']['email']);
             }
-            
+
             # check verifica dati spedizione, setting con i dati fatturazione di moodle
             $logger->log("*** Verifica allineamento dati spedizione");
             // echo "<br>Verifica allineamento dati spedizione<br>";
-            
+
             if (empty($this->userMoodle['0']['fattind']) || empty($this->userMoodle['0']['fattcomune']) || empty($this->userMoodle['0']['fattcap']) || empty($this->userMoodle['0']['fattprov'])) {
                 $logger->log("*** Dati fatturazione Moodle incompleti");
                 $array = [
@@ -730,41 +778,41 @@ class UserController extends BaseController
                     'destinatario' => 'moodle',
                     'messaggio' => "Dati fatturazione Moodle incompleti per l'utente: " . $this->userMoodle['0']['nome']
                 ];
-                
+
                 $this->emailMessagge($array);
                 return 0;
             }
-            
+
             if ($this->userMoodle['0']['Rag'] != $this->BPSAP['NameAddressS']) {
                 $logger->log("{Address S} disallineata");
                 $allineamento['S']['Address'] = $this->userMoodle['0']['Rag'];
             }
-            
+
             if ($this->userMoodle['0']['Rag'] != $this->BPSAP['NameAddressB']) {
                 $logger->log("{Address B} disallineata");
                 $allineamento['B']['Address'] = $this->userMoodle['0']['Rag'];
             }
-            
+
             if ($this->userMoodle['0']['fattcomune'] != $this->BPSAP['MailCity']) {
                 $logger->log("{MailCity} disallineata");
                 $allineamento['S']['city'] = $this->userMoodle['0']['fattcomune'];
             }
-            
+
             if ($this->userMoodle['0']['fattind'] != $this->BPSAP['MailAddres']) {
                 $logger->log("{MailAddres} disallineata");
                 $allineamento['S']['Street'] = $this->userMoodle['0']['fattind'];
             }
-            
+
             if ($this->userMoodle['0']['fattcap'] != $this->BPSAP['MailZipCod']) {
                 $logger->log("{MailZipCod} disallineata");
                 $allineamento['S']['ZipCode'] = $this->userMoodle['0']['fattcap'];
             }
-            
+
             if ($this->userMoodle['0']['fattprov'] != $this->BPSAP['MailProv']) {
                 $logger->log("{MailProv} disallineata");
                 $allineamento['S']['State'] = $this->userMoodle['0']['fattprov'];
             }
-            
+
             if (! empty($allineamento)) {
                 $logger->log("Dump array allineamento");
                 $logger->dump($allineamento);
@@ -776,7 +824,7 @@ class UserController extends BaseController
                         'destinatario' => 'sap',
                         'messaggio' => "Problemi allineando utente "
                     ];
-                    
+
                     $this->emailMessagge($array);
                     return 0;
                 } else {
@@ -790,52 +838,45 @@ class UserController extends BaseController
             }
         }
     }
-    
+
     public function getCostInv()
     {
-        $config = new costanti();
-        // memorizzo costo corso e formato
-        $this->cost = number_format(($this->userMoodle[1]['cost']), 2, '.', '');
-        
-        // if bollo memorizzo formato e costo bollo senno metto 0
-        if ($this->userMoodle[1]['cost'] > 77) {
-            # echo "<br>con bollo";
-            $this->bollo = true;
-            $this->costbollo = $config::TOTALBOLLO;
-            $this->cost = number_format(($this->cost - $this->costbollo), 2, '.', '');
-        } else {
-            $this->bollo = false;
-            $this->costbollo = "0.00";
-        }
-        /*
-         * echo "<br>bollo :".$this->bollo;
-         * echo "<br>costo :".$this->cost;
-         * echo "<br>costbollo :".$this->costbollo;
-         * echo "<br>";
-         * exit;
-         */
+        $logger = Logger::get_logger();
+
+        // Verifichiamo che i dati esistano nell'array ricevuto dall'API
+        // Ipotizziamo che l'indice [1] contenga i dati della transazione/ordine
+        $this->cost = isset($this->userMoodle[1]['cost']) ? $this->userMoodle[1]['cost'] : 0;
+        $this->costbollo = isset($this->userMoodle[1]['fee_bollo']) ? $this->userMoodle[1]['fee_bollo'] : 0;
+
+        // Log di controllo per debuggare la quadratura
+        $logger->log("Mapping Costi WC -> SAP: Imponibile [" . $this->cost . "] | Bollo [" . $this->costbollo . "]");
+
+        // Impostiamo il flag bollo per il createXML
+        $this->bollo = ($this->costbollo > 0) ? true : false;
+
         return;
     }
-    
-    public function getSeries($series, $year){
+
+    public function getSeries($series, $year)
+    {
         $logger = Logger::get_logger();
-        $this->series=$series.$year;
-        $logger->log("Numero serie per tipo [".$this->tipo."]");
+        $this->series = $series . $year;
+        $logger->log("Numero serie per tipo [" . $this->tipo . "]");
         $xml = new SapModel();
         $logger->log('Nuovo documento di numerazione serie : ' . $this->series);
         $this->numSeries = $xml->getNumSeries($this->series);
         $logger->log('Numero serie : ' . $this->numSeries);
         return $this->numSeries;
     }
-    
+
     public function createXMLInv()
     {
         try {
             $logger = Logger::get_logger();
             $config = new costanti();
-            
+
             $this->datiInvoice = [];
-            //echo "<br>tipo: ".$this->tipo;
+            // echo "<br>tipo: ".$this->tipo;
             switch ($this->tipo) {
                 case 'manual':
                     $this->datiInvoice['data'] = date("dmY_His", strtotime($this->userMoodle['1']['datapagamento']));
@@ -851,25 +892,25 @@ class UserController extends BaseController
                     $this->datiInvoice['data1'] = date('Ymd');
                     $this->datiInvoice['data2'] = date("d.m.Y");
                     $this->datiInvoice['yearSeries'] = date("y");
-                    $this->datiInvoice['series'] = $this->getSeries(costanti::SERIESPP, $this->datiInvoice['yearSeries'] );
+                    $this->datiInvoice['series'] = $this->getSeries(costanti::SERIESPP, $this->datiInvoice['yearSeries']);
                     break;
                 default:
                     $logger->log('1. Metodo di pagamento non riconosciuto :' . $this->tipo);
                     return false;
                     break;
             }
-            
+
             # header
             # $this->invxmlHeader
             # $this->invxmlBody
             # $this->invxmlFooter
-            
+
             $xml = new SapModel();
             $logger->log('Nuovo documento di numerazione serie : ' . $this->datiInvoice['series']);
             $this->docNum = $xml->getDocNumber($this->datiInvoice['series']);
-            
+
             $logger->log('Numero documento : ' . $this->docNum);
-            
+
             $this->invxmlHeader = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
                                 <soapenv:Header/>
                                     <soapenv:Body>
@@ -877,10 +918,10 @@ class UserController extends BaseController
                                     <loc:reqType>set</loc:reqType>
                                     <loc:objType>documenti</loc:objType>
                                     <loc:docXml>';
-            
+
             $this->invxmlStart = '<BOM>
                                 <BO>';
-            
+
             $this->invxmlAdmInfo = '<AdmInfo>
                                 <requestUser>' . $config::USER . '</requestUser>
                                 <requestDataTime>' . date('Y-m-d h:m:s') . '</requestDataTime>
@@ -888,7 +929,7 @@ class UserController extends BaseController
                                 <Object>' . $config::OBJ . '</Object>
                                 <Version>' . $config::VERSION . '</Version>
                             </AdmInfo>';
-            
+
             $this->invxmlDocuments = '<Documents>
                                 <row>
                                     <Series>' . $this->datiInvoice['series'] . '</Series>
@@ -904,64 +945,76 @@ class UserController extends BaseController
                                     <U_B1SYS_INV_TYPE>' . $config::INV_TYPE . '</U_B1SYS_INV_TYPE>
                                 </row>
                             </Documents>';
-            
+
             $this->datiInvoice['docnum'] = $this->docNum;
             $this->datiInvoice['cardcode'] = $this->BPSAP['cardcode'];
-            
+
             // --- INIZIO CORREZIONE FINALE: Pulizia ItemDescription per XML ---
-            $itemDescriptionRaw = $this->sapArticle[0]['itemname'] . ' - ' . $this->userMoodle['0']['nome'];
-            
+            $itemDescriptionRaw = $this->sapArticle[0]['itemname']; 
+            $itemDescriptionRaw = $this->sanitizeString($itemDescriptionRaw);
+
             // Applica la pulizia al nome completo prima di metterlo nell'XML
             $cleanedItemDescription = html_entity_decode($itemDescriptionRaw, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            $cleanedItemDescription = utf8_encode(utf8_decode($cleanedItemDescription));
+            $cleanedItemDescription = mb_convert_encoding($cleanedItemDescription, 'UTF-8', 'ISO-8859-1');
             // --- FINE CORREZIONE FINALE ---
-            
-            $this->invxmlArticles = '<Document_Lines>';
+
+            $logger->log("--- VERIFICA ARRAY FINALE ---");
+            $logger->dump($this->userMoodle[1]);
+
+            $qty = isset($this->userMoodle[1]['qty']) ? $this->userMoodle[1]['qty'] : 1;
+            $unitPrice = isset($this->userMoodle[1]['unit_price']) ? $this->userMoodle[1]['unit_price'] : $this->cost;
+
+            // --- COSTRUZIONE RIGA CORSO ---
+            $this->invxmlArticles = '<Document_Lines>'; // Inizializzazione tag padre
             $this->invxmlArticles .= '<row>
-                                    <ItemCode>' . $this->sapArticle[0]['itemcode'] . '</ItemCode>
-				                    <ItemDescription>' . $this->sapArticle[0]['itemname'] . ' - ' . $this->userMoodle['0']['nome'] . '</ItemDescription>
-				                    <Quantity>1</Quantity>
-				                    <LineTotal>' . $this->cost . '</LineTotal>
-				                    <VatGroup>' . $this->sapArticle[0]['vatgourpSa'] . '</VatGroup>
-				                    <AccountCode>' . $this->sapArticle[0]['RevenuesAc'] . '</AccountCode>
-                                </row>';
-            
-            $this->datiInvoice['cost'] = $this->cost;
+                                        <ItemCode>' . $this->sapArticle[0]['itemcode'] . '</ItemCode>
+                                        <ItemDescription>' . $cleanedItemDescription . '</ItemDescription>
+                                        <Quantity>' . $qty . '</Quantity>
+                                        <UnitPrice>' . number_format((float)$unitPrice, 2, '.', '') . '</UnitPrice>
+                                        <LineTotal>' . number_format((float)$this->cost, 2, '.', '') . '</LineTotal>
+                                        <VatGroup>' . $this->sapArticle[0]['vatgourpSa'] . '</VatGroup>
+                                        <AccountCode>' . $this->sapArticle[0]['RevenuesAc'] . '</AccountCode>
+                                    </row>';
+
+            // --- AGGIORNAMENTO DATI PER PDF E INCASSO ---
+            $this->datiInvoice['cost'] = $this->cost; // Il totale del corso (es. 510.00)
             $this->datiInvoice['art1'] = $this->sapArticle[0]['itemcode'];
             $this->datiInvoice['descrart1'] = $this->sapArticle[0]['itemname'];
             
             $this->datiInvoice['artbollo'] = $config::ITEMCODEBOLLO;
-            $this->datiInvoice['costbollo'] = $this->costbollo;
+            $this->datiInvoice['costbollo'] = $this->costbollo; // Il valore del bollo (es. 2.00)
             $this->datiInvoice['descrbollo'] = $config::ITEMDESCRBOLLO;
-            
+
+            // RIGA 2: IL BOLLO
             if ($this->bollo == true) {
                 $this->invxmlArticles .= '<row>
-				                        <ItemCode>' . $config::ITEMCODEBOLLO . '</ItemCode>
-				                        <ItemDescription>' . $config::ITEMDESCRBOLLO . '</ItemDescription>
-				                        <Quantity>1</Quantity>
-				                        <LineTotal>' . $this->costbollo . '</LineTotal>
-				                        <VatGroup>' . $config::VATBOLLO . '</VatGroup>
-				                        <AccountCode>' . $config::ACCOUNTCODEBOLLO . '</AccountCode>
-			                         </row>';
+        <ItemCode>' . $config::ITEMCODEBOLLO . '</ItemCode>
+        <ItemDescription>' . $config::ITEMDESCRBOLLO . '</ItemDescription>
+        <Quantity>1</Quantity>
+        <UnitPrice>' . number_format((float) $this->costbollo, 2, '.', '') . '</UnitPrice>
+        <LineTotal>' . number_format((float) $this->costbollo, 2, '.', '') . '</LineTotal>
+        <VatGroup>' . $config::VATBOLLO . '</VatGroup>
+        <AccountCode>' . $config::ACCOUNTCODEBOLLO . '</AccountCode>
+    </row>';
             }
             $this->invxmlArticles .= '</Document_Lines>';
-            
+
             $this->invxmlRate = '<Document_Installments>
                                 <row>
                                     <DueDate>' . $this->datiInvoice['data1'] . '</DueDate>
                                     <Total>' . number_format(($this->cost + $this->costbollo), 2, '.', '') . '</Total>
                                 </row>
                             </Document_Installments>';
-            
+
             $this->datiInvoice['costtot'] = number_format(($this->cost + $this->costbollo), 2, '.', '');
             $this->invxmlEnd = '</BO>
                                 </BOM>';
-            
+
             $this->invxmlFooter = '</loc:docXml>
                               </loc:BOsync>
                               </soapenv:Body>
                               </soapenv:Envelope>';
-            
+
             # $logger->log("XML Admin Info");
             # $logger->log($this->invxmlAdmInfo);
             # $logger->log("XML Documents");
@@ -970,7 +1023,7 @@ class UserController extends BaseController
             # $logger->log($this->invxmlArticles);
             # $logger->log("XML Rate");
             # $logger->log($this->invxmlRate);
-            
+
             $invXml = $this->invxmlHeader;
             $invXmlBody = $this->invxmlStart;
             $invXmlBody .= $this->invxmlAdmInfo;
@@ -978,29 +1031,29 @@ class UserController extends BaseController
             $invXmlBody .= $this->invxmlArticles;
             $invXmlBody .= $this->invxmlRate;
             $invXmlBody .= $this->invxmlEnd;
-            
+
             $logger->log("XML Invoice");
             $logger->log($invXmlBody);
-            
+
             $tagOpen = '/</i';
             $tagClose = '/>/i';
             $invXmlBody = preg_replace($tagOpen, '&lt;', $invXmlBody);
             $invXmlBody = preg_replace($tagClose, '&gt;', $invXmlBody);
-            
+
             $invXml .= $invXmlBody;
             $invXml .= $this->invxmlFooter;
-            
+
             $this->invXml = $invXml;
-            # $logger->log("Generazione dell' XML Fattura:");
-            # $logger->log($this->invXml);
-            
+            // $logger->log("Generazione dell' XML Fattura:");
+            // $logger->log($this->invXml);
+
             $resWS = $this->sendWS($this->invXml, $this->docNum);
-            
+
             if ($resWS == 'check') {
                 $resWS = $xml->checkInvoice($this->docNum);
                 $logger->log("verifica inserimento fattura: " . $resWS);
             }
-            
+
             if ($resWS == false) {
                 $logger->log("errore inserimento fattura WS");
                 return false;
@@ -1011,26 +1064,26 @@ class UserController extends BaseController
                 return true;
             }
         } catch (Exception $e) {
-            $logger->log("Error: ".__METHOD__."\n".$e->getMessage()."\n".$e->getLine());
+            $logger->log("Error: " . __METHOD__ . "\n" . $e->getMessage() . "\n" . $e->getLine());
             return false;
         }
     }
-    
+
     public function listAction()
     {
         $strErrorDesc = '';
         $requestMethod = $_SERVER["REQUEST_METHOD"];
         $this->arrQueryStringParams = $this->getQueryStringParams();
-        
+
         if (strtoupper($requestMethod) == 'GET') {
             try {
                 $userModel = new UserModel();
-                
+
                 $intLimit = 10;
                 if (isset($this->arrQueryStringParams['limit']) && $this->arrQueryStringParams['limit']) {
                     $intLimit = $this->arrQueryStringParams['limit'];
                 }
-                
+
                 $arrUsers = $userModel->getUsers($intLimit);
                 $responseData = json_encode($arrUsers);
             } catch (Error $e) {
@@ -1041,7 +1094,7 @@ class UserController extends BaseController
             $strErrorDesc = 'Method not supported';
             $strErrorHeader = 'HTTP/1.1 422 Unprocessable Entity';
         }
-        
+
         // send soutput
         if (! $strErrorDesc) {
             $this->sendOutput($responseData, array(
@@ -1057,14 +1110,14 @@ class UserController extends BaseController
             ));
         }
     }
-    
+
     public function incasso()
     {
         # print_r($this->datiInvoice);
         $config = new costanti();
         $logger = Logger::get_logger();
         $logger->log('Tipo: ' . $this->tipo);
-        
+
         # imposto il conto della fattura
         switch ($this->tipo) {
             case 'manual':
@@ -1085,9 +1138,9 @@ class UserController extends BaseController
                 return false;
                 break;
         }
-        
+
         $logger->log('Inserimento incasso: ' . $this->datiInvoice['docentry']);
-        
+
         $this->invxmlHeader = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
                                 <soapenv:Header/>
                                     <soapenv:Body>
@@ -1095,10 +1148,10 @@ class UserController extends BaseController
                                     <loc:reqType>set</loc:reqType>
                                     <loc:objType>primenote</loc:objType>
                                     <loc:docXml>';
-        
+
         $this->invxmlStart = '<BOM>
                                 <BO>';
-        
+
         $this->invxmlAdmInfo = '<AdmInfo>
                                 <requestUser>' . $config::USER . '</requestUser>
                                 <requestDataTime>' . date('Y-m-d h:m:s') . '</requestDataTime>
@@ -1106,7 +1159,7 @@ class UserController extends BaseController
                                 <Object>' . $config::OBJ_INCASSO . '</Object>
                                 <Version>' . $config::VERSION . '</Version>
                                 </AdmInfo>';
-        
+
         $this->invxmlDocuments = '<Payments>
                                     <row>
                                         <DocType>rCustomer</DocType>
@@ -1120,7 +1173,7 @@ class UserController extends BaseController
                                         <DocObjectCode>bopot_IncomingPayments</DocObjectCode>
                                     </row>
                                 </Payments>';
-        
+
         $this->invxmlArticles = '<Payments_Invoices>';
         $this->invxmlArticles .= '<row>
                                     <DocEntry>' . $this->datiInvoice['docentry'] . '</DocEntry>
@@ -1129,41 +1182,41 @@ class UserController extends BaseController
                                     <InvoiceType>it_Invoice</InvoiceType>
                                 </row>';
         $this->invxmlArticles .= '</Payments_Invoices>';
-        
+
         $this->invxmlEnd = '</BO>
                                 </BOM>';
-        
+
         $this->invxmlFooter = '</loc:docXml>
                               </loc:BOsync>
                               </soapenv:Body>
                               </soapenv:Envelope>';
-        
+
         $logger->log("XML Admin Info");
         $logger->log($this->invxmlAdmInfo);
         $logger->log("XML Documents");
         $logger->log($this->invxmlDocuments);
         $logger->log("XML Articles");
         $logger->log($this->invxmlArticles);
-        
+
         $invXml = $this->invxmlHeader;
         $invXmlBody = $this->invxmlStart;
         $invXmlBody .= $this->invxmlAdmInfo;
         $invXmlBody .= $this->invxmlDocuments;
         $invXmlBody .= $this->invxmlArticles;
         $invXmlBody .= $this->invxmlEnd;
-        
+
         $tagOpen = '/</i';
         $tagClose = '/>/i';
         $invXmlBody = preg_replace($tagOpen, '&lt;', $invXmlBody);
         $invXmlBody = preg_replace($tagClose, '&gt;', $invXmlBody);
-        
+
         $invXml .= $invXmlBody;
         $invXml .= $this->invxmlFooter;
-        
+
         $this->invXml = $invXml;
         $logger->log("Generazione dell' XML Incasso:");
         $logger->log($this->invXml);
-        
+
         $resWS = $this->sendWS($this->invXml);
         if ($resWS == false) {
             $logger->log("errore inserimento incasso WS");
@@ -1173,52 +1226,61 @@ class UserController extends BaseController
             return true;
         }
     }
-    
+
     public function invoicePdf()
     {
         try {
-            
             $config = new costanti();
             $logger = Logger::get_logger();
-            $logger->log("Dump array datiInvoice");
+            
+            $logger->log("--- Inizio procedura generazione PDF ---");
             $logger->dump($this->datiInvoice);
             
-            ob_end_clean();
-            $pdf = new PDF_Invoice('P', 'mm', 'A4');
+            // Pulizia buffer per evitare corruzioni nel PDF
+            if (ob_get_length()) ob_end_clean();
             
+            // 1. Inizializzazione e generazione PDF
+            $pdf = new PDF_Invoice('P', 'mm', 'A4');
             $pdf->AddPage();
             $pdf->logo('it');
-            $pdf->addSociete("Sede Legale", $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . $this->userMoodle['0']['fattcomune'] . " " . $this->userMoodle['0']['fattprov'] . "\nITALY");
             
-            $pdf->fact_dev("Fattura di Vendita N.:", $this->datiInvoice['docnum'] . " ");
+            $pdf->addSociete("Sede Legale",
+                $this->userMoodle['0']['Rag'] . "\n" .
+                $this->userMoodle['0']['fattind'] . "\n" .
+                $this->userMoodle['0']['fattcap'] . " " .
+                $this->userMoodle['0']['fattcomune'] . " " .
+                $this->userMoodle['0']['fattprov'] . "\nITALY"
+                );
             
-            $pdf->addShip("\nData emissione " . $this->datiInvoice['data2'] . "\n\nSpett.le\n" . strtoupper($this->userMoodle['0']['Rag']) . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . $this->userMoodle['0']['fattcomune'] . " " . $this->userMoodle['0']['fattprov'] . "\nITALY");
+            $pdf->fact_dev("Fattura di Vendita N°:", $this->datiInvoice['docnum'] . " ");
             
-            $pdf->datifatt("Codice Cliente: " . $this->BPSAP['cardcode'], "Partita Iva : " . $this->BPSAP['partitaiva'], "Cod. Fisc. : " . $this->BPSAP['AddId']);
+            $pdf->addShip("\nData emissione " . $this->datiInvoice['data2'] .
+                "\n\nSpett.le\n" . strtoupper($this->userMoodle['0']['Rag']) . "\n" .
+                $this->userMoodle['0']['fattind'] . "\n" .
+                $this->userMoodle['0']['fattcap'] . " " .
+                $this->userMoodle['0']['fattcomune'] . " " .
+                $this->userMoodle['0']['fattprov'] . "\nITALY"
+                );
             
-            // Griglia dettaglio
+            $pdf->datifatt(
+                "Codice Cliente: " . $this->BPSAP['cardcode'],
+                "Partita Iva : " . $this->BPSAP['partitaiva'],
+                "Cod. Fisc. : " . $this->BPSAP['AddId']
+                );
+            
+            // Griglia colonne
             $cols = array(
-                "ART" => 30,
-                "DESCRIZIONE" => 70,
-                "Q.TA" => 10,
-                "PREZZO UNIT." => 30,
-                "IVA" => 20,
-                "TOT." => 30
+                "ART" => 30, "DESCRIZIONE" => 70, "Q.TA" => 10,
+                "PREZZO UNIT." => 30, "IVA" => 20, "TOT." => 30
             );
             $pdf->addCols($cols);
+            $pdf->addLineFormat(array(
+                "ART" => "L", "DESCRIZIONE" => "L", "Q.TA" => "C",
+                "PREZZO UNIT." => "R", "IVA" => "C", "TOT." => "R"
+            ));
             
-            $cols = array(
-                "ART" => "L",
-                "DESCRIZIONE" => "L",
-                "Q.TA" => "C",
-                "PREZZO UNIT." => "R",
-                "IVA" => "C",
-                "TOT." => "R"
-            );
-            
-            $pdf->addLineFormat($cols);
+            // Inserimento righe
             $y = 109;
-            
             $line = array(
                 "ART" => $this->datiInvoice['art1'],
                 "DESCRIZIONE" => $this->datiInvoice['descrart1'] . "\n" . strtoupper($this->userMoodle['0']['nome']),
@@ -1227,7 +1289,6 @@ class UserController extends BaseController
                 "IVA" => "0.00",
                 "TOT." => $this->datiInvoice['cost'] . " EUR"
             );
-            
             $size = $pdf->addLine($y, $line);
             
             if ($this->bollo) {
@@ -1240,98 +1301,88 @@ class UserController extends BaseController
                     "IVA" => "0.00",
                     "TOT." => $this->datiInvoice['costbollo'] . " EUR"
                 );
-                
                 $size = $pdf->addLine($y, $line);
             }
             
-            $y += $size + 2;
-            
+            // Totali e IVA
             $tot_prods = array(
-                array(
-                    "imponibile" => $this->datiInvoice['cost'],
-                    "codiva" => 'Esente art.10 n.20 vendite',
-                    "iva" => 0
-                )
+                array("imponibile" => $this->datiInvoice['cost'], "codiva" => 'Esente art.10 n.20 vendite', "iva" => 0)
             );
-            
-            if ($this->bollo == true) {
-                array_push($tot_prods, array(
-                    "imponibile" => $this->datiInvoice['costbollo'],
-                    "codiva" => 'Esente art.15',
-                    "iva" => 0
-                ));
+            if ($this->bollo) {
+                array_push($tot_prods, array("imponibile" => $this->datiInvoice['costbollo'], "codiva" => 'Esente art.15', "iva" => 0));
             }
             
-            $tab_tva = array(
-                "1" => 1,
-                "2" => 1
-            );
-            
-            $params = array(
-                "RemiseGlobale" => 1,
-                "remise_tva" => 100, // {lo sconto si applica a questa partita IVA}
-                "remise" => 0, // {totale sconto}
-                "remise_percent" => 10, // {percentuale di sconto su questo importo IVA}
-                "FraisPort" => 1,
-                "portTTC" => 10, // importo delle spese di spedizione tasse incluse, par defaut la IVA = 19.6 %
-                "portHT" => 0, // importo delle spese di spedizione IVA esclusa
-                "portTVA" => 19.6, // valore dell'IVA da applicare all'importo al netto dell'imposta
-                "AccompteExige" => 1,
-                "accompte" => 0, // importo del deposito (tasse incluse)
-                "accompte_percent" => 15, // percentuale di acconto (tasse incluse)
-                "Remarque" => "Totale fattura"
-            );
-            
-            $pdf->addCadreTVAs(); # disegno contenitore
+            $pdf->addCadreTVAs();
             $pdf->addTVAs1($tot_prods);
             
-            // Position at 1.5 cm from bottom
-            $pdf->SetY(- 60);
+            $pdf->SetY(-60);
             $pdf->SetFont('Arial', 'I', 8);
             $pdf->Cell(0, 10, 'Condizione di pagamento AVVENUTO', 0, 0, 'L');
             
+            // 2. Salvataggio File
             $this->nomepdf = 'Fattura di vendita_' . $this->datiInvoice['docnum'] . '_' . $this->datiInvoice['data'] . '.pdf';
-            # da rimettere a I/F
-            $pdf->Output($config::DEST_PDF . '/' . $this->nomepdf, 'F');
-            if (! file_exists($config::DEST_PDF . '/' . $this->nomepdf)) {
-                $logger->log("Generazione fattura PDF [" . $config::DEST_PDF . '/' . $this->nomepdf . "] non effettuata");
-                return FALSE;
+            $fullPath = $config::DEST_PDF . '/' . $this->nomepdf;
+            
+            $pdf->Output($fullPath, 'F');
+            
+            // Verifica REALE esistenza file
+            if (!file_exists($fullPath)) {
+                $logger->log("ERRORE CRITICO: Generazione file PDF fallita in: " . $fullPath);
+                return false; // Qui interrompiamo perché il documento fiscale non esiste
             }
             
-            // invio la fattura di cortesia solo se l email personale è valorizzata
-            if (! empty($this->userMoodle['0']['email'])) {
-                $mail = new send();
-                $array = [
-                    # $this->arrQueryStringParams['mdl']
-                    'mdl_emailLogin' => $config::MAILBOXES[$this->mdl]['login'],
-                    'mdl_emailPass' => $config::MAILBOXES[$this->mdl]['pass'],
-                    'mdl_nomecorso' => $config::MAILBOXES[$this->mdl]['corso'],
-                    #'oggetto' => '[SVI] Fattura corso Medical',
-                    'oggetto' => 'Fattura corso Medical',
-                    'messaggio' => "Egregio Dottore/Gentile Dottoressa " . strtoupper($this->BPSAP['cardname']) . ",<br>Le inviamo in allegato la fattura di cortesia num. " . $this->datiInvoice['docnum'] . " del " . $this->datiInvoice['data2'] . " per l'iscrizione al " . $this->datiInvoice['descrart1'] . ".<br>" . "L'originale del presente documento &egrave; stato trasmesso in formato elettronico a norma di legge e sar&agrave; disponibile presso il proprio cassetto fiscale dell'Agenzie delle Entrate." . "<br>Cordiali saluti.<br>" . $config::MAILBOXES[$this->mdl]['corso'] . " - Medical Evidence div. MeTMi Srl",
-                    'destinatario' => 'giampiero.digregorio@metmi.it',
-                    #'destinatario' => $this->userMoodle['0']['email'],
-                    'pdf' => $config::DEST_PDF . '/' . $this->nomepdf
-                ];
-                if ($mail->sendFattura($array))
-                    return true;
-                    else
-                        return false;
+            $logger->log("PDF salvato correttamente: " . $this->nomepdf);
+            
+            // 3. Invio Email (Gestito come errore NON bloccante)
+            if (!empty($this->userMoodle['0']['email'])) {
+                try {
+                    $mail = new send();
+                    $arrayMail = [
+                        'mdl_emailLogin' => $config::MAILBOXES[$this->mdl]['login'],
+                        'mdl_emailPass'  => $config::MAILBOXES[$this->mdl]['pass'],
+                        'mdl_nomecorso'  => $config::MAILBOXES[$this->mdl]['corso'],
+                        'oggetto'        => 'Fattura corso Medical',
+                        'messaggio'      => "Egregio Dottore/Gentile Dottoressa " . strtoupper($this->BPSAP['cardname']) . ",<br>Le inviamo in allegato la fattura di cortesia num. " . $this->datiInvoice['docnum'] . " del " . $this->datiInvoice['data2'] . " per l'iscrizione al " . $this->datiInvoice['descrart1'] . ".<br>L'originale del presente documento &egrave; stato trasmesso in formato elettronico a norma di legge.<br>Cordiali saluti.",
+                        'destinatario'   => $this->userMoodle['0']['email'],
+                        'pdf'            => $fullPath
+                    ];
+                    
+                    if ($mail->sendFattura($arrayMail)) {
+                        $logger->log("Email di cortesia inviata con successo a: " . $this->userMoodle['0']['email']);
+                    } else {
+                        // SE L'EMAIL FALLISCE, LOGGHIAMO MA NON RESTITUIAMO FALSE
+                        $logger->log("WARNING: Fattura creata ma INVIO EMAIL FALLITO a: " . $this->userMoodle['0']['email']);
+                    }
+                } catch (Exception $mailEx) {
+                    $logger->log("Eccezione durante invio mail: " . $mailEx->getMessage());
+                }
             } else {
-                $logger->log("Email non presente, fattura non inviata");
-                return true;
+                $logger->log("Email non presente in Moodle, salto l'invio.");
             }
+            
+            // Restituiamo TRUE perché il PDF è stato generato e salvato (punto 2)
+            return true;
+            
         } catch (Exception $e) {
-            echo "err: " . $e->getMessage();
-            $logger->log("Errore: " . $e->getMessage());
-            $logger->log('Error on line ' . $e->getLine() . ' in ' . $e->getFile());
+            $logger = Logger::get_logger();
+            $logger->log("ERRORE GENERALE in invoicePdf: " . $e->getMessage() . " alla riga " . $e->getLine());
             return false;
         }
     }
-    
+
     public function emailMessagge(array $array)
     {
         $config = new costanti();
+        $logger = Logger::get_logger(); // Recuperiamo il logger per tracciare il blocco
+
+        // --- AGGIUNTA: CONTROLLO DISABILITAZIONE EMAIL ---
+        // Se la costante è definita ed è false, logghiamo e usciamo senza inviare
+        if (defined('costanti::ENABLE_EMAIL') && $config::ENABLE_EMAIL === false) {
+            $logger->log("INFO: Invio email disattivato globalmente. Bloccata: " . ($array['oggetto'] ?? 'Senza oggetto'));
+            return true;
+        }
+        // --------------------------------------------------
+
         $destinatario = null;
         switch ($array['destinatario']) {
             case 'moodle':
@@ -1344,127 +1395,220 @@ class UserController extends BaseController
                 $destinatario = $config::EMAIL_SYSTEM;
                 break;
         }
-        
+
         $this->arrQueryStringParams = $this->getQueryStringParams();
-        $local = "http://".$config::URL."/index.php/sap/ins?";
-        
-        $piece = explode('/',$this->nome_log);
+        $local = "http://" . $config::URL . "/index.php/sap/ins?";
+
+        $piece = explode('/', $this->nome_log);
         $logfilename = end($piece);
-        
+
         $array = [
             'oggetto' => $array['oggetto'] . " - " . $config::EMAIL_OBJECT,
-            'messaggio' => $array['messaggio']
-            . "<br><br>"
-            . "Per rilanciare la procedura clicca " .
-            "<a href =\"$local"
-            #. "mdl=" . $this->arrQueryStringParams['mdl'] . "&courseid=" . $this->arrQueryStringParams['courseid'] . "&userid=" . $this->arrQueryStringParams['userid'] . "&tipo=" . $this->arrQueryStringParams['tipo'] . "&payment_id=" . $this->arrQueryStringParams['payment_id'] ."\">qui</a>"
-            . "id=" . $this->arrQueryStringParams['id'] ."\">qui</a>"
-            . "<br>Dettaglio: <a href=\"http://".$config::URL."/logs/".$logfilename."\">".$logfilename."</a>",
+            'messaggio' => $array['messaggio'] . "<br><br>" . "Per rilanciare la procedura clicca " . "<a href =\"$local" . "id=" . $this->arrQueryStringParams['id'] . "\">qui</a>" . "<br>Dettaglio: <a href=\"http://" . $config::URL . "/logs/" . $logfilename . "\">" . $logfilename . "</a>",
             'destinatario' => $destinatario
         ];
-        
+
         $mail = new send();
         $mail->sendEmail($array);
-        
+
         # salvo il nome log in DB
         $log = new MoodleModel('mdlapps_moodleadmin');
         $log->traceLog($this->arrQueryStringParams, $this->nome_log);
     }
 
     // File: Controller/Api/UserController.php (Aggiungere all'interno della classe UserController)
-    
+
     /**
      * Sanitizza le stringhe per rimuovere accenti, apostrofi e simboli problematici
      * prima dell'inserimento in DB/XML.
      */
-    private function _sanitizeForDatabase($string) {
-        if (!is_string($string) || empty($string)) { return $string; }
-        
+    private function _sanitizeForDatabase($string)
+    {
+        if (! is_string($string) || empty($string)) {
+            return $string;
+        }
+
         $string = html_entity_decode($string, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        
+
         $search = [
-            'à', 'è', 'é', 'ì', 'ò', 'ù', 'À', 'È', 'É', 'Ì', 'Ò', 'Ù',
-            'á', 'Á', 'í', 'Í', 'ó', 'Ó', 'ú', 'Ú', 'ñ', 'Ñ',
-            "'", '’', '‘', '`', '"', '“', '”', '´',
-            '–', '—', '-'
+            'à',
+            'è',
+            'é',
+            'ì',
+            'ò',
+            'ù',
+            'À',
+            'È',
+            'É',
+            'Ì',
+            'Ò',
+            'Ù',
+            'á',
+            'Á',
+            'í',
+            'Í',
+            'ó',
+            'Ó',
+            'ú',
+            'Ú',
+            'ñ',
+            'Ñ',
+            "'",
+            '’',
+            '‘',
+            '`',
+            '"',
+            '“',
+            '”',
+            '´',
+            '–',
+            '—',
+            '-'
         ];
         $replace = [
-            'a', 'e', 'e', 'i', 'o', 'u', 'A', 'E', 'E', 'I', 'O', 'U',
-            'a', 'A', 'i', 'I', 'o', 'O', 'u', 'U', 'n', 'N',
-            ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-            ' ', ' ', ' '
+            'a',
+            'e',
+            'e',
+            'i',
+            'o',
+            'u',
+            'A',
+            'E',
+            'E',
+            'I',
+            'O',
+            'U',
+            'a',
+            'A',
+            'i',
+            'I',
+            'o',
+            'O',
+            'u',
+            'U',
+            'n',
+            'N',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' ',
+            ' '
         ];
-        
+
         $string = str_replace($search, $replace, $string);
         $string = preg_replace('/\s+/', ' ', $string);
-        
+
         return trim($string);
     }
-    
+
     /**
      * Helper: Normalizza i caratteri speciali UTF-8 in ASCII standard.
      * Gestisce apostrofi curvi, spazi invisibili, trattini e simboli di Word/iOS.
      */
     /**
      * Helper: Normalizzazione Totale per SAP
-     * 1. Apostrofi (Dritti e Curvi) -> Diventano SPAZI
+     * 1.
+     * Apostrofi (Dritti e Curvi) -> Diventano SPAZI
      * 2. Accenti (à, è, ì...) -> Diventano lettere base (a, e, i...)
      */
-    private function sanitizeString($str) {
-        if (empty($str) || !is_string($str)) {
+    private function sanitizeString($str)
+    {
+        if (empty($str) || ! is_string($str)) {
             return '';
         }
-        
+
         // 1. Mappa di sostituzione (Caratteri "Sporchi" -> Caratteri "Puliti")
         $replacements = [
             // --- APOSTROFI -> SPAZIO ---
-            "'"            => " ", // Apostrofo standard ASCII
+            "'" => " ", // Apostrofo standard ASCII
             "\xe2\x80\x98" => " ", // ‘ (Left Single Quote)
             "\xe2\x80\x99" => " ", // ’ (Right Single Quote - Tipico di D’Avolio)
             "\xe2\x80\x9a" => " ", // ‚ (Single Low-9 Quote)
             "\xe2\x80\x9b" => " ", // ‛ (Single High-Reversed-9 Quote)
-            
+
             // --- RIMUZIONE ACCENTI (Minuscole) ---
-            "à" => "a", "á" => "a", "â" => "a", "ä" => "a", "å" => "a",
-            "è" => "e", "é" => "e", "ê" => "e", "ë" => "e",
-            "ì" => "i", "í" => "i", "î" => "i", "ï" => "i",
-            "ò" => "o", "ó" => "o", "ô" => "o", "ö" => "o",
-            "ù" => "u", "ú" => "u", "û" => "u", "ü" => "u",
-            "y" => "y", "ÿ" => "y", "ñ" => "n", "ç" => "c",
-            
+            "à" => "a",
+            "á" => "a",
+            "â" => "a",
+            "ä" => "a",
+            "å" => "a",
+            "è" => "e",
+            "é" => "e",
+            "ê" => "e",
+            "ë" => "e",
+            "ì" => "i",
+            "í" => "i",
+            "î" => "i",
+            "ï" => "i",
+            "ò" => "o",
+            "ó" => "o",
+            "ô" => "o",
+            "ö" => "o",
+            "ù" => "u",
+            "ú" => "u",
+            "û" => "u",
+            "ü" => "u",
+            "y" => "y",
+            "ÿ" => "y",
+            "ñ" => "n",
+            "ç" => "c",
+
             // --- RIMUZIONE ACCENTI (Maiuscole - se arrivano così) ---
-            "À" => "A", "Á" => "A", "Â" => "A", "Ä" => "A", "Å" => "A",
-            "È" => "E", "É" => "E", "Ê" => "E", "Ë" => "E",
-            "Ì" => "I", "Í" => "I", "Î" => "I", "Ï" => "I",
-            "Ò" => "O", "Ó" => "O", "Ô" => "O", "Ö" => "O",
-            "Ù" => "U", "Ú" => "U", "Û" => "U", "Ü" => "U",
-            "Ñ" => "N", "Ç" => "C",
-            
+            "À" => "A",
+            "Á" => "A",
+            "Â" => "A",
+            "Ä" => "A",
+            "Å" => "A",
+            "È" => "E",
+            "É" => "E",
+            "Ê" => "E",
+            "Ë" => "E",
+            "Ì" => "I",
+            "Í" => "I",
+            "Î" => "I",
+            "Ï" => "I",
+            "Ò" => "O",
+            "Ó" => "O",
+            "Ô" => "O",
+            "Ö" => "O",
+            "Ù" => "U",
+            "Ú" => "U",
+            "Û" => "U",
+            "Ü" => "U",
+            "Ñ" => "N",
+            "Ç" => "C",
+
             // --- ALTRI SIMBOLI DA PULIRE ---
-            "\xe2\x80\x9c" => "",  // “ (Doppie virgolette - Rimosse)
-            "\xe2\x80\x9d" => "",  // ” (Doppie virgolette - Rimosse)
-            '"'            => "",  // Doppio apice standard - Rimosso
+            "\xe2\x80\x9c" => "", // “ (Doppie virgolette - Rimosse)
+            "\xe2\x80\x9d" => "", // ” (Doppie virgolette - Rimosse)
+            '"' => "", // Doppio apice standard - Rimosso
             "\xe2\x80\x93" => "-", // Trattino medio -> Trattino normale
-            "\xc2\xa0"     => " ", // Spazio non divisibile -> Spazio normale
+            "\xc2\xa0" => " " // Spazio non divisibile -> Spazio normale
         ];
-        
+
         // Esegue la sostituzione massiva
         $str = strtr($str, $replacements);
-        
+
         // 2. Decodifica HTML (Es: &egrave; diventa è -> poi gestito se rimasto, ma meglio pulire prima)
         // Nota: Se strtr ha lavorato bene, qui non dovrebbero esserci più accenti,
         // ma lo lasciamo per sicurezza su entità numeriche.
         $str = html_entity_decode($str, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        
+
         // 3. Rimuove eventuali caratteri non ASCII rimasti (brutale ma efficace per SAP)
         // Mantiene solo lettere, numeri, spazi e punteggiatura base
         // $str = preg_replace('/[^a-zA-Z0-9\s\-\.]/', '', $str); // Scommenta se vuoi essere drastico
-        
+
         // 4. Gestione Spazi Multipli
         // Se "D'Avolio" diventa "D Avolio", va bene.
-        // Ma "L' Albero" diventerebbe "L  Albero" (due spazi). Questo lo corregge:
+        // Ma "L' Albero" diventerebbe "L Albero" (due spazi). Questo lo corregge:
         $str = preg_replace('/\s+/', ' ', $str);
-        
+
         return trim($str);
     }
 }

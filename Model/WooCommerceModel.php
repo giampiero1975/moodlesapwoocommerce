@@ -78,5 +78,63 @@ class WooCommerceModel {
             return null;
         }
     }
+    
+    /**
+     * Wrapper: trasforma il dump grezzo di WooCommerce in un array sintetico
+     * focalizzato sui dati fiscali, articoli e costi per il log e le verifiche.
+     * * @param array $orderData L'array restituito da getOrderById()
+     * @return array Sintesi dei dati vitali
+     */
+    public function getSyntheticOrder(array $orderData) {
+        $sintesi = [
+            'INFO_BASE' => [
+                'ID'     => $orderData['id'] ?? 'N/D',
+                'STATO'  => $orderData['status'] ?? 'N/D',
+                'TOTALE' => $orderData['total'] ?? '0.00',
+                'METODO' => $orderData['payment_method_title'] ?? 'N/D',
+            ],
+            'BILLING_FULL' => $orderData['billing'] ?? [],
+            'META_FISCALI' => [],
+            'ARTICOLI'     => [],
+            'BOLLI_FEES'   => []
+        ];
+        
+        // Estrazione selettiva dei meta-dati (Fiscali e Bancari)
+        if (isset($orderData['meta_data']) && is_array($orderData['meta_data'])) {
+            // Cerchiamo solo le chiavi che contengono queste parole
+            $filtro = ['billing', 'cf', 'piva', 'sdi', 'pec', 'bacs'];
+            foreach ($orderData['meta_data'] as $meta) {
+                foreach ($filtro as $word) {
+                    if (isset($meta['key']) && strpos(strtolower($meta['key']), $word) !== false) {
+                        $sintesi['META_FISCALI'][$meta['key']] = $meta['value'];
+                    }
+                }
+            }
+        }
+        
+        // Sintesi Line Items (Prodotti)
+        if (isset($orderData['line_items']) && is_array($orderData['line_items'])) {
+            foreach ($orderData['line_items'] as $item) {
+                $sintesi['ARTICOLI'][] = [
+                    'SKU'    => $item['sku'] ?? 'MANCANTE',
+                    'NOME'   => $item['name'] ?? 'N/D',
+                    'QTY'    => $item['quantity'] ?? 0,
+                    'NETTO'  => $item['total'] ?? '0.00'
+                ];
+            }
+        }
+        
+        // Sintesi Fee Lines (Bollo, ecc.)
+        if (!empty($orderData['fee_lines']) && is_array($orderData['fee_lines'])) {
+            foreach ($orderData['fee_lines'] as $fee) {
+                $sintesi['BOLLI_FEES'][] = [
+                    'NOME'   => $fee['name'] ?? 'N/D',
+                    'IMPORTO'=> $fee['total'] ?? '0.00'
+                ];
+            }
+        }
+        
+        return $sintesi;
+    }
 }
 ?>

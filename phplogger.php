@@ -63,8 +63,8 @@ class Logger
             {
                 mkdir($default_log_path);
             }
-            $this->logname = $default_log_path.'/'.date('Ymd_His').'.log';
-            #$this->logname = $default_log_path.'/'.date('Ymd').'.log';
+            #$this->logname = $default_log_path.'/'.date('Ymd_His').'.log';
+            $this->logname = $default_log_path.'/'.date('Ymd').'.log';
             
             $this->log_handle = fopen($this->logname, 'w'); // mettere "a"
         }
