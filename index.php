@@ -1,5 +1,4 @@
 <?php
-die("rilascio");
 require __DIR__ . "/inc/bootstrap.php";
 require PROJECT_ROOT_PATH . "Controller/Api/UserController.php";
 require PROJECT_ROOT_PATH . "Controller/Api/UserControllerEs.php";

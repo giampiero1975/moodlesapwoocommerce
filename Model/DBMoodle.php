@@ -26,7 +26,7 @@ class dbmoodle
             
             // --- CONFIGURAZIONE LOCALE (DEBUG) ---
             $this->host = "127.0.0.1"; // O "localhost"
-            $this->mdl  = "paypal";    // Nome del tuo DB locale
+            $this->mdl  = "mdlapps_moodleadmin";    // Nome del tuo DB locale
             $this->user = "root";      // Utente DB locale (Modifica se diverso)
             $this->pass = "";          // Password DB locale (Modifica se diversa)
             

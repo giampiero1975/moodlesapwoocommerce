@@ -3,6 +3,7 @@ class costanti {
 	#const URL ='moodlesap.metmi.lan';
     const URL ='moodlesapwoocommerce.test';
     const ENABLE_EMAIL = true; // (false|true) per riattivare l'invio
+    const DEBUG_EMAIL = true;  // true = invia solo a EMAIL_SYSTEM | false = invia al cliente reale
     
     const USER='manager';
     const REQUESTDB='METMI_TEST';
