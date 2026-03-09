@@ -86,6 +86,10 @@ class WooCommerceModel {
      * @return array Sintesi dei dati vitali
      */
     public function getSyntheticOrder(array $orderData) {
+        
+        // echo "<pre>";
+        // print_r($orderData);
+        // die();
         $sintesi = [
             'INFO_BASE' => [
                 'ID'     => $orderData['id'] ?? 'N/D',
@@ -102,11 +106,18 @@ class WooCommerceModel {
         // Estrazione selettiva dei meta-dati (Fiscali e Bancari)
         if (isset($orderData['meta_data']) && is_array($orderData['meta_data'])) {
             // Cerchiamo solo le chiavi che contengono queste parole
-            $filtro = ['billing', 'cf', 'piva', 'sdi', 'pec', 'bacs'];
+            $filtro = ['billing', 'cf', 'piva', 'sdi', 'pec', 'bacs', 'fees'];
             foreach ($orderData['meta_data'] as $meta) {
                 foreach ($filtro as $word) {
                     if (isset($meta['key']) && strpos(strtolower($meta['key']), $word) !== false) {
-                        $sintesi['META_FISCALI'][$meta['key']] = $meta['value'];
+                        // Se intercettiamo la chiave delle commissioni, estraiamo solo la sotto-chiave specifica
+                        if ($meta['key'] === '_ppcp_paypal_fees') {
+                            // Accediamo direttamente a [paypal_fee][value] come da struttura log [cite: 14, 16, 17]
+                            $sintesi['META_FISCALI']['paypal_fee'] = $meta['value']['paypal_fee']['value'] ?? '0.00';
+                        } else {
+                            // Altrimenti salviamo il valore standard (stringa) [cite: 42, 45]
+                            $sintesi['META_FISCALI'][$meta['key']] = $meta['value'];
+                        }
                     }
                 }
             }

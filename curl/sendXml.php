@@ -42,6 +42,8 @@ class sendXml extends UserController{
             curl_setopt($this->ch, CURLOPT_POSTFIELDS, $this->xml); // the SOAP request
             curl_setopt($this->ch, CURLOPT_HTTPHEADER, $this->headers);
             
+            curl_setopt($this->ch, CURLOPT_FORBID_REUSE, true);
+            curl_setopt($this->ch, CURLOPT_FRESH_CONNECT, true);
             // converting
             $this->response = curl_exec($this->ch);
             $logger->log($this->response);

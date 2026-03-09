@@ -155,6 +155,10 @@ class UserController extends BaseController
     
     private function mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails)
     {
+        // echo "<pre>";
+        // print_r($orderData);
+        
+        
         $billingRaw = $orderData["billing"];
         $billing = array_map(function ($value) {
             return is_string($value) ? strtoupper($this->sanitizeString($value)) : $value;
@@ -170,28 +174,58 @@ class UserController extends BaseController
             
             $cf_user = ''; $cf_business = ''; $piva = ''; $pec = ''; $sdi = ''; $dataBonifico = '';
             
+            $commissioni_paypal = 0;
             foreach ($orderData['meta_data'] as $meta) {
-                if (isset($meta['key']) && !empty($meta['value']) && is_string($meta['value'])) {
-                    $val = trim($meta['value']);
-                    switch ($meta['key']) {
-                        case 'cf_user': $cf_user = strtoupper($val); break;
-                        case 'billing_business_cf':
-                        case 'billing_cf':
-                        case '_billing_cf': $cf_business = strtoupper($val); break;
-                        case 'billing_piva':
-                        case '_billing_piva':
-                        case 'piva_user': $piva = strtoupper($val); break;
-                        case 'billing_pec':
-                        case '_billing_pec': $pec = $val; break;
-                        case 'billing_sdi':
-                        case '_billing_sdi':
-                        case 'billing_codiceunivoco': $sdi = strtoupper($val); break;
-                        case 'bacs_date':
-                        case '_bacs_date':
-                            $dObj = DateTime::createFromFormat('d/m/Y', $val);
-                            $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $val;
-                            break;
-                    }
+                if (!isset($meta['key']) || empty($meta['value'])) continue;
+                
+                switch ($meta['key']) {
+                    // GESTIONE COMMISSIONI (Dato di tipo Array)
+                    case '_ppcp_paypal_fees':
+                        if (is_array($meta['value']) && isset($meta['value']['paypal_fee']['value'])) {
+                            $commissioni_paypal = $meta['value']['paypal_fee']['value'];
+                            $logger->log("Catturata Commissione da Array: " . $commissioni_paypal);
+                        }
+                        break;
+                        
+                        // GESTIONE DATI FISCALI (Dati di tipo Stringa)
+                    case 'cf_user':
+                        $cf_user = strtoupper(trim($meta['value']));
+                        break;
+                        
+                    case 'billing_business_cf':
+                    case 'billing_cf':
+                    case '_billing_cf':
+                        $cf_business = strtoupper(trim($meta['value']));
+                        break;
+                        
+                    case 'billing_piva':
+                    case '_billing_piva':
+                    case 'piva_user':
+                        $piva = strtoupper(trim($meta['value']));
+                        break;
+                        
+                    case 'billing_pec':
+                    case '_billing_pec':
+                        $pec = trim($meta['value']);
+                        break;
+                        
+                    case 'billing_sdi':
+                    case '_billing_sdi':
+                    case 'billing_codiceunivoco':
+                        $sdi = strtoupper(trim($meta['value']));
+                        break;
+                        
+                    case 'bacs_date':
+                    case '_bacs_date':
+                        $val = trim($meta['value']);
+                        $dObj = DateTime::createFromFormat('d/m/Y', $val);
+                        $dataBonifico = $dObj ? $dObj->format('Y-m-d') : $val;
+                        break;
+                        
+                        // Alternativa rapida se presente come stringa singola [cite: 123]
+                    case 'PayPal Transaction Fee':
+                        $commissioni_paypal = $meta['value'];
+                        break;
                 }
             }
             
@@ -253,9 +287,13 @@ class UserController extends BaseController
                 'items' => $items,
                 'totale_pagato' => $orderData['total'] ?? 0,
                 'fee_bollo' => $feeBollo,
-                'datapagamento' => $dataBonifico
+                'datapagamento' => $dataBonifico,
+                'commissioni' => $commissioni_paypal
             ];
             
+            // echo "<br>------------ CLIENTE ------------<br>";
+            // print_r($cliente);
+            // die();
             return $cliente;
     }
     
@@ -1022,8 +1060,15 @@ class UserController extends BaseController
             case 'els_paypal':
             case 'woocommerce':
                 $this->contobancario = costanti::CCPAYPAL;
-                $this->datiInvoice['commissioni'] = (($this->datiInvoice['costtot'] * 3.40) / 100) + 0.35;
-                $this->datiInvoice['impnetto'] = $this->datiInvoice['costtot'] - $this->datiInvoice['commissioni'];
+                $commReale = $this->userMoodle[1]['commissioni'] ?? 0;
+                
+                // Assegniamo il valore per l'invio a SAP, forzando il formato numerico
+                $this->datiInvoice['commissioni'] = number_format((float)$commReale, 2, '.', '');
+                
+                // Calcoliamo il netto sottraendo la commissione reale dal totale
+                $this->datiInvoice['impnetto'] = number_format($this->datiInvoice['costtot'] - $this->datiInvoice['commissioni'], 2, '.', '');                
+                $logger->log("Pagamento WC - Totale: " . $this->datiInvoice['costtot'] . " | Comm: " . $this->datiInvoice['commissioni'] . " | Netto: " . $this->datiInvoice['impnetto']);
+                // $this->datiInvoice['impnetto'] = $this->datiInvoice['costtot'] - $this->datiInvoice['commissioni'];
                 break;
             default:
                 $logger->log('2. Metodo di pagamento non riconosciuto :' . $this->tipo);
@@ -1090,8 +1135,12 @@ class UserController extends BaseController
         $invXmlBody .= $this->invxmlArticles;
         $invXmlBody .= $this->invxmlEnd;
         
+        $logger->log("Generazione dell' XML Incasso:");
+        $logger->log($invXmlBody);
+        
         $tagOpen = '/</i';
         $tagClose = '/>/i';
+        
         $invXmlBody = preg_replace($tagOpen, '&lt;', $invXmlBody);
         $invXmlBody = preg_replace($tagClose, '&gt;', $invXmlBody);
         
@@ -1099,8 +1148,6 @@ class UserController extends BaseController
         $invXml .= $this->invxmlFooter;
         
         $this->invXml = $invXml;
-        $logger->log("Generazione dell' XML Incasso:");
-        $logger->log($this->invXml);
         
         $resWS = $this->sendWS($this->invXml);
         if ($resWS == false) {
