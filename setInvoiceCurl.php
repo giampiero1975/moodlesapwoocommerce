@@ -1,46 +1,84 @@
 <?php
-include_once 'Model/DBMoodle.php';
-date_default_timezone_set('Europe/Rome');
+if (!defined('PROJECT_ROOT_PATH')) {
+    define('PROJECT_ROOT_PATH', __DIR__ . '/');
+}
+
+include_once 'Model/SapInvoiceHandler.php';
+$sapHandler = new SapServiceHandler();
+/*
+$risultato = $sapHandler->getSystemUptimeCheck();
+
+echo "<pre>";
+echo "Risultato ottenuto:\n";
+echo "------------------------------\n";
+var_dump($risultato);
+echo "------------------------------\n";
+echo "</pre>";
+
+if (strpos($risultato, 'UP') !== false || strpos($risultato, 'Rilevati') !== false) {
+    echo "<b style='color:green'>TEST SUPERATO: PHP vede i processi!</b>";
+} else {
+    echo "<b style='color:red'>TEST FALLITO: PHP non vede ancora i processi.</b>";
+}
+die();
+echo "===== MONITORAGGIO SAP SYSTEM =====<br>";
+*/
+
+// 1. Diagnosi
+$stats = $sapHandler->pingWebService();
+echo "1. DIAGNOSI: " . $stats['stato'] . " ({$stats['total_time_ms']}ms)<br>";
+
+die();
+/*
+// -- üß™ INIZIO FORZATURA (DA RIMUOVERE DOPO IL TEST) ---
+echo "<br>‚ö†Ô∏è SIMULAZIONE ATTIVA: Sovrascrivo i dati per test GIALLO...<br>";
+// $stats['total_time_ms'] = 499; // <--- Questo valore far√† scattare il GIALLO
+$stats['total_time_ms'] = 2001; // <--- Questo valore far√† scattare il ROSSO
+$stats['is_alive'] = true;
+// --- üß™ FINE FORZATURA ---
+*/
+
+// 2. L'ORCHESTRATORE: gestisce log, reset e attese internamente
+$procedi = $sapHandler->gestisciStatoServer($stats);
+// 3. Elaborazione Fatture (solo se il sistema √® pronto)
+if ($procedi) {
+    echo "==========================================<br>";
+    echo "SISTEMA PRONTO: Avvio invio fatture...<br>";
+    
+    // Qui chiameresti il metodo processPendingInvoices() di cui parlavamo prima
+    // echo $sapHandler->processPendingInvoices();
+} else {
+    echo "==========================================<br>";
+    exit("INTERRUZIONE: Sistema non ripristinato dopo la manovra.<br>");
+}
+
 try {
-    $moodle = new dbmoodle('mdlapps_moodleadmin');
-    // verifico che siamo presenti pagamenti non elaborati(sales='0') che non siano stati inseriti pi˘ di 30 minuti f‡ per inviarlo una sola volta
+    // --- C. RECUPERO E INVIO FATTURE ---
+    // verifico che siamo presenti pagamenti non elaborati(sales='0') che non siano stati inseriti pi√π di 30 minuti f√† per inviarlo una sola volta
+	$moodle = new DBMoodle();
     $enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and `logfile` IS null;");
 
     # echo "<pre>";
     if (empty($enrol_paypal)) {
-        #echo "<br>pagamenti non presenti";
+        # echo "<br>pagamenti non presenti";
         exit();
     }
-    
-    #print_r($enrol_paypal);
-    #die();
-    $url=null;
+
+    # print_r($enrol_paypal);
+    # die();
+    $url = null;
     foreach ($enrol_paypal as $keyEnrol) {
-        // --- INIZIO FIX ANTI-DUPLICATI ---
         $current_id = $keyEnrol['id'];
-        
-        // 1. PRIMA di fare qualsiasi cosa, proviamo a "prenotare" questo ID sul database.
-        //    Usiamo un update diretto. Se logfile NON Ë null (quindi qualcun altro lo sta facendo),
-        //    la query non aggiorner‡ nessuna riga.
-        $sql_lock = "UPDATE moodle_payments SET logfile = 'IN_CORSO_LOCK' WHERE id = '$current_id' AND logfile IS NULL";
-        
-        // ATTENZIONE: Qui devi usare il metodo della tua classe per eseguire query di Update.
-        // Se la tua classe DBMoodle ha un metodo ->query() o ->execute(), usalo qui.
-        // Esempio generico:
-        $moodle->query($sql_lock);
-        
-        // 2. CONTROLLO FONDAMENTALE: Abbiamo aggiornato davvero la riga?
-        //    Se affected_rows Ë 0, significa che logfile NON era null (qualcun altro lo ha preso).
-        if ($moodle->affected_rows == 0) {
-            echo "\n" . date("H:i:s") . " ID $current_id saltato: gi‡ in lavorazione da un altro processo.";
-            continue; // SALTA SUBITO AL PROSSIMO ELEMENTO DEL CICLO
+
+        if (empty($current_id)) {
+            echo "‚ö†Ô∏è Attenzione: Trovato record senza ID, lo salto.<br>";
+            continue; // <--- IL SALVAGENTE!
         }
-        // --- FINE FIX ---
-        
+		
         $url = "http://moodlesapwoocommerce.metmi.lan/index.php/sap/ins?"; # url di ese
-        $url .= "id=" . $keyEnrol['id'];
-        #echo "<br>".$url;
-        
+        $url .= "id=" . $current_id;
+        # echo "<br>".$url;
+
         // step1
         $curlSES = curl_init();
         // step2
@@ -50,7 +88,7 @@ try {
         // step3
         $result = curl_exec($curlSES);
 
-        echo "\n" . date("H:i:s")." ";
+        echo "<br>" . date("H:i:s") . " ";
         if (! $result) {
             echo $url . " - Errore: " . curl_error($curlSES) . " - Codice errore: " . curl_errno($curlSES);
         } else {
@@ -59,7 +97,7 @@ try {
         }
         // step4
         curl_close($curlSES);
-        
+
         sleep(60); // imposto 2 minuti per ogni chiamata
     }
 } catch (Exception $e) {
