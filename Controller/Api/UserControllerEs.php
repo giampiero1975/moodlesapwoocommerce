@@ -106,7 +106,16 @@ class UserControllerEs extends BaseController
             $this->courseid = $this->arrQueryStringParams['courseid'];
 
             $userModel = new dbmoodle('mdlapps_moodleadmin');
-            $sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`,`nfattura`)" . " VALUES ('" . $this->arrQueryStringParams['mdl'] . "'," . $this->arrQueryStringParams['userid'] . ", " . $this->arrQueryStringParams['courseid'] . ",'" . $this->BPSAP['cardcode'] . "','" . $this->BPSAP['cardname'] . "','" . $this->BPSAP['AddId'] . "','" . $this->BPSAP['partitaiva'] . "','" . $this->datiInvoice['docnum'] . "');";
+$sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`, `nfattura`, `moodle_payment_id`)" .
+            " VALUES ('" . $this->arrQueryStringParams['mdl'] . "', " .
+            $this->arrQueryStringParams['userid'] . ", '" .
+            $this->arrQueryStringParams['courseid'] . "', '" .
+            $this->BPSAP['cardcode'] . "', '" .
+            $this->BPSAP['cardname'] . "', '" .
+            $this->BPSAP['AddId'] . "', '" .
+            $this->BPSAP['partitaiva'] . "', '" .
+            $this->datiInvoice['docnum'] . "', '" .
+            $this->arrQueryStringParams['id'] . "');";
 
             if (! $userModel->create($sql)) {
                 $logger->log("problemi inserendo la fattura: " . $sql);
@@ -278,21 +287,21 @@ class UserControllerEs extends BaseController
 
             $pdf->AddPage();
             $pdf->logo('es');
-            #$pdf->addSociete("Oficina registrada", iconv('UTF-8', 'CP1252', $this->userMoodle['0']['Rag']) . "\n" . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattind']) . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAÑA");
-            $pdf->addSociete("Oficina registrada", $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAÑA");
-            $pdf->fact_dev("Factura de venta N°:", $this->datiInvoice['docnum'] . " ");
+            #$pdf->addSociete("Oficina registrada", iconv('UTF-8', 'CP1252', $this->userMoodle['0']['Rag']) . "\n" . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattind']) . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAï¿½A");
+            $pdf->addSociete("Oficina registrada", $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAï¿½A");
+            $pdf->fact_dev("Factura de venta Nï¿½:", $this->datiInvoice['docnum'] . " ");
 
             $pdf->addShip("\nFecha de factura: " . $this->datiInvoice['data2'] . "\n\nEstimado\n" . 
             # strtoupper($this->userMoodle['0']['Rag'])."\n" .
-            # iconv('UTF-8', 'CP1252', $this->userMoodle['0']['Rag']) . "\n" . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattind']) . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAÑA");
-            $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAÑA");
+            # iconv('UTF-8', 'CP1252', $this->userMoodle['0']['Rag']) . "\n" . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattind']) . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAï¿½A");
+            $this->userMoodle['0']['Rag'] . "\n" . $this->userMoodle['0']['fattind'] . "\n" . $this->userMoodle['0']['fattcap'] . " " . iconv('UTF-8', 'CP1252', $this->userMoodle['0']['fattcomune']) . " " . $this->userMoodle['0']['fattprov'] . "\nESPAï¿½A");
             
-            $pdf->datifatt("Codigo del cliente: " . $this->BPSAP['cardcode'], "Número de valor agregado : " . $this->BPSAP['partitaiva'], "Cód. Fisc. : " . $this->BPSAP['AddId']);
+            $pdf->datifatt("Codigo del cliente: " . $this->BPSAP['cardcode'], "Nï¿½mero de valor agregado : " . $this->BPSAP['partitaiva'], "Cï¿½d. Fisc. : " . $this->BPSAP['AddId']);
 
             // Griglia dettaglio
             $cols = array(
                 "ART" => 30,
-                "DESCRIPCIÓN" => 70,
+                "DESCRIPCIï¿½N" => 70,
                 "CANT." => 10,
                 "PRECIO UNIT." => 30,
                 "IVA" => 20,
@@ -302,7 +311,7 @@ class UserControllerEs extends BaseController
 
             $cols = array(
                 "ART" => "L",
-                "DESCRIPCIÓN" => "L",
+                "DESCRIPCIï¿½N" => "L",
                 "CANT." => "C",
                 "PRECIO UNIT." => "R",
                 "IVA" => "C",
@@ -314,7 +323,7 @@ class UserControllerEs extends BaseController
 
             $line = array(
                 "ART" => $this->datiInvoice['art1'],
-                "DESCRIPCIÓN" => $this->datiInvoice['descrart1'] . "\n" .$this->userMoodle['0']['Rag'],
+                "DESCRIPCIï¿½N" => $this->datiInvoice['descrart1'] . "\n" .$this->userMoodle['0']['Rag'],
                 "CANT." => "1",
                 "PRECIO UNIT." => $this->datiInvoice['cost'] . " EUR",
                 "IVA" => "0.00",
@@ -329,7 +338,7 @@ class UserControllerEs extends BaseController
                 $y += $size + 2;
                 $line = array(
                     "ART" => $this->datiInvoice['artbollo'],
-                    "DESCRIPCIÓN" => $this->datiInvoice['descrbollo'],
+                    "DESCRIPCIï¿½N" => $this->datiInvoice['descrbollo'],
                     "CANT." => "1",
                     "PRECIO UNIT." => $this->datiInvoice['costbollo'] . " EUR",
                     "IVA" => "0.00",
@@ -344,8 +353,8 @@ class UserControllerEs extends BaseController
             $tot_prods = array(
                 array(
                     "imponibile" => $this->datiInvoice['cost'],
-                    # "codiva"=>"Exenta de IVA Art.20 Uno 10° L.37/1992",
-                    "codiva" => "Exenta Art.20 Uno 10°",
+                    # "codiva"=>"Exenta de IVA Art.20 Uno 10ï¿½ L.37/1992",
+                    "codiva" => "Exenta Art.20 Uno 10ï¿½",
                     "iva" => 0
                 )
             );
@@ -384,7 +393,7 @@ class UserControllerEs extends BaseController
             // Position at 1.5 cm from bottom
             $pdf->SetY(- 60);
             $pdf->SetFont('Arial', 'I', 8);
-            $pdf->Cell(0, 10, 'Condición de pago COMPLETADA', 0, 0, 'L');
+            $pdf->Cell(0, 10, 'Condiciï¿½n de pago COMPLETADA', 0, 0, 'L');
 
             $this->nomepdf = 'Fattura di vendita_' . $this->datiInvoice['docnum'] . '_' . $this->datiInvoice['data'] . '.pdf';
             # da rimettere a I/F
@@ -395,11 +404,11 @@ class UserControllerEs extends BaseController
             }
             $logger->log(__LINE__);
             
-            // invio la fattura di cortesia solo se l email personale è valorizzata
+            // invio la fattura di cortesia solo se l email personale ï¿½ valorizzata
             if (! empty($this->userMoodle['0']['email'])) {
                 $mail = new send();
                 
-                $mess = '<br>Le enviamos la factura relativa al curso ' . $config::MAILBOXES[$this->mdl]['corso'] . '.<br>Un saludo,<br>Secretaria administrativa Medical Evidence - División de Marketing & Telematica España, S.L.';
+                $mess = '<br>Le enviamos la factura relativa al curso ' . $config::MAILBOXES[$this->mdl]['corso'] . '.<br>Un saludo,<br>Secretaria administrativa Medical Evidence - Divisiï¿½n de Marketing & Telematica Espaï¿½a, S.L.';
                 $mess = mb_convert_encoding($mess, "UTF-8", "Windows-1252");
                 $mess = 'Estimada Doctora/Estimado Doctor ' . iconv("ISO-8859-1//TRANSLIT", "UTF-8", strtoupper($this->BPSAP['cardname'])) . $mess;
                 $logger->log(mb_convert_encoding($mess, "UTF-8", "Windows-1252"));
@@ -528,7 +537,7 @@ class UserControllerEs extends BaseController
                 $this->XmlBp = $this->createXMLBP();
 
                 if ($this->sendWS($this->XmlBp) == true) {
-                    // allineo modalità di pagamento CBI dopo inserimento
+                    // allineo modalitï¿½ di pagamento CBI dopo inserimento
                     $userSap = new SapModelEs();
                     $logger->log("Recupero i dati SAP dopo inserimento WS");
                     $this->BPSAP = $this->getSapUser(); // GET delle modifiche fatte
@@ -1049,7 +1058,7 @@ class UserControllerEs extends BaseController
                 // $logger->log($xml);
 
                 if ($this->sendWS($xml) == true) {
-                    // allineo modalità di pagamento CBI dopo inserimento
+                    // allineo modalitï¿½ di pagamento CBI dopo inserimento
                     $logger->log("Recupero i dati SAP dopo inserimento WS");
                     $this->clienteSap = $userSap->getUsers($this->clienteMoodle[0]['CF']);
                 } else {

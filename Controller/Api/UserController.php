@@ -104,16 +104,16 @@ class UserController extends BaseController
                         
                         $userModel = new dbmoodle('mdlapps_moodleadmin');
                         
-                        // Assicurati che ci siano gli apici '" . ... . "' attorno a courseid
-                        $sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`,`nfattura`)" .
+                        $sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`, `nfattura`, `moodle_payment_id`)" .
                             " VALUES ('" . $this->arrQueryStringParams['mdl'] . "', " .
                             $this->arrQueryStringParams['userid'] . ", '" .
-                            $this->arrQueryStringParams['courseid'] . "', '" . // <--- QUI GLI APICI SONO VITALI
+                            $this->arrQueryStringParams['courseid'] . "', '" .
                             $this->BPSAP['cardcode'] . "', '" .
                             $this->BPSAP['cardname'] . "', '" .
                             $this->BPSAP['AddId'] . "', '" .
                             $this->BPSAP['partitaiva'] . "', '" .
-                            $this->datiInvoice['docnum'] . "');";
+                            $this->datiInvoice['docnum'] . "', '" .
+                            $this->arrQueryStringParams['id'] . "');";
                         
                         if (! $userModel->create($sql)) {
                             $logger->log("problemi inserendo la fattura: " . $sql);
