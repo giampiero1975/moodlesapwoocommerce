@@ -1,42 +1,18 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 if (!defined('PROJECT_ROOT_PATH')) {
     define('PROJECT_ROOT_PATH', __DIR__ . '/');
 }
 
 include_once 'Model/SapInvoiceHandler.php';
 $sapHandler = new SapServiceHandler();
-/*
-$risultato = $sapHandler->getSystemUptimeCheck();
-
-echo "<pre>";
-echo "Risultato ottenuto:\n";
-echo "------------------------------\n";
-var_dump($risultato);
-echo "------------------------------\n";
-echo "</pre>";
-
-if (strpos($risultato, 'UP') !== false || strpos($risultato, 'Rilevati') !== false) {
-    echo "<b style='color:green'>TEST SUPERATO: PHP vede i processi!</b>";
-} else {
-    echo "<b style='color:red'>TEST FALLITO: PHP non vede ancora i processi.</b>";
-}
-die();
-echo "===== MONITORAGGIO SAP SYSTEM =====<br>";
-*/
 
 // 1. Diagnosi
 $stats = $sapHandler->pingWebService();
 echo "1. DIAGNOSI: " . $stats['stato'] . " ({$stats['total_time_ms']}ms)<br>";
-
-die();
-/*
-// -- 🧪 INIZIO FORZATURA (DA RIMUOVERE DOPO IL TEST) ---
-echo "<br>⚠️ SIMULAZIONE ATTIVA: Sovrascrivo i dati per test GIALLO...<br>";
-// $stats['total_time_ms'] = 499; // <--- Questo valore farà scattare il GIALLO
-$stats['total_time_ms'] = 2001; // <--- Questo valore farà scattare il ROSSO
-$stats['is_alive'] = true;
-// --- 🧪 FINE FORZATURA ---
-*/
 
 // 2. L'ORCHESTRATORE: gestisce log, reset e attese internamente
 $procedi = $sapHandler->gestisciStatoServer($stats);
@@ -53,21 +29,35 @@ if ($procedi) {
 }
 
 try {
+	// 1. GENERAZIONE BATCH ID
+    $batchID = "PRENOTATO_" . date("Ymd_His");
+	
     // --- C. RECUPERO E INVIO FATTURE ---
     // verifico che siamo presenti pagamenti non elaborati(sales='0') che non siano stati inseriti più di 30 minuti fà per inviarlo una sola volta
-	$moodle = new DBMoodle();
-    $enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and `logfile` IS null;");
+	$moodle = new DBMoodle('mdlapps_moodleadmin');
+    $enrol_paypal = $moodle->select("SELECT * FROM moodle_payments WHERE sales='0' and `logfile` IS null LIMIT 5;");
 
-    # echo "<pre>";
-    if (empty($enrol_paypal)) {
-        # echo "<br>pagamenti non presenti";
-        exit();
+	if (empty($enrol_paypal)) {
+		die("SISTEMA: Nessun record da elaborare (Coda vuota).\n");
+	}
+
+    // 3. UPDATE DI QUEI 10 SPECIFICI (Utilizziamo gli ID appena estratti)
+    $ids_da_prenotare = [];
+    foreach ($enrol_paypal as $row) {
+        $ids_da_prenotare[] = $row['id'];
     }
+    
+    // Trasformiamo l'array in una stringa (es: 101,102,103...)
+    $lista_id = implode(',', $ids_da_prenotare);
+    
+    // Eseguiamo l'update mirato solo su questi ID
+	// echo "UPDATE moodle_payments SET logfile = '$batchID' WHERE id IN ($lista_id)";
+    $sql_update = "UPDATE moodle_payments SET logfile = '$batchID' WHERE id IN ($lista_id)";
+    $moodle->create($sql_update);
 
-    # print_r($enrol_paypal);
-    # die();
     $url = null;
     foreach ($enrol_paypal as $keyEnrol) {
+		echo "<br> Entro nel foreach";
         $current_id = $keyEnrol['id'];
 
         if (empty($current_id)) {
@@ -77,7 +67,7 @@ try {
 		
         $url = "http://moodlesapwoocommerce.metmi.lan/index.php/sap/ins?"; # url di ese
         $url .= "id=" . $current_id;
-        # echo "<br>".$url;
+        echo "<br>".$url;
 
         // step1
         $curlSES = curl_init();
@@ -98,7 +88,7 @@ try {
         // step4
         curl_close($curlSES);
 
-        sleep(60); // imposto 2 minuti per ogni chiamata
+        sleep(120); // imposto 2 minuti per ogni chiamata
     }
 } catch (Exception $e) {
     echo $url . "<br>Err: " . $e->getMessage();
