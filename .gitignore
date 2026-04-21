@@ -2,10 +2,7 @@
 logs/
 fatture/
 
-# Dipendenze e Autoload
-vendor/
-composer.json
-composer.lock
+# Dipendenze e Autoload (Tracciato su Git senza PHPUnit)
 
 # Test e Mocking
 .phpunit.result.cache
