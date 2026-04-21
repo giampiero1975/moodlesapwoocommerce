@@ -1,3 +1,18 @@
 # Ignora tutta la cartella dei log e fatture
 logs/
 fatture/
+
+# Dipendenze e Autoload
+vendor/
+composer.json
+composer.lock
+
+# Test e Mocking
+.phpunit.result.cache
+phpunit.xml
+tests/
+
+# File scratch e log temporanei
+scratch/
+test_output.txt
+test_wa.php
