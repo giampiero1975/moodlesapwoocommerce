@@ -7,26 +7,28 @@ if (!defined('PROJECT_ROOT_PATH')) {
     define('PROJECT_ROOT_PATH', __DIR__ . '/');
 }
 
-include_once 'Model/SapInvoiceHandler.php';
-$sapHandler = new SapServiceHandler();
+include_once 'Model/SapDiagnosticHandler.php';
+$sapHandler = new SapDiagnosticHandler();
 
-// 1. Diagnosi
-$stats = $sapHandler->pingWebService();
-echo "1. DIAGNOSI: " . $stats['stato'] . " ({$stats['total_time_ms']}ms)<br>";
+// 1. Diagnosi Iniziale Deep (Web Service + DB SQL)
+$stats = $sapHandler->getCombinedSystemHealth();
+echo "1. DIAGNOSI INITIALE: " . $stats['stato'] . " (Peggior Latenza: {$stats['total_time_ms']}ms)<br>";
 
-// 2. L'ORCHESTRATORE: gestisce log, reset e attese internamente
+// 2. L'ORCHESTRATORE: 
+// Gestisce Pulizia (Giallo), Reset IIS/SQL (Rosso), Attese e WhatsApp internamente.
 $procedi = $sapHandler->gestisciStatoServer($stats);
-// 3. Elaborazione Fatture (solo se il sistema è pronto)
+
+// 3. Verdetto Finale
 if ($procedi) {
     echo "==========================================<br>";
-    echo "SISTEMA PRONTO: Avvio invio fatture...<br>";
-    
-    // Qui chiameresti il metodo processPendingInvoices() di cui parlavamo prima
-    // echo $sapHandler->processPendingInvoices();
+    echo "✅ SISTEMA PRONTO: Avvio invio fatture...<br>";
 } else {
     echo "==========================================<br>";
-    exit("INTERRUZIONE: Sistema non ripristinato dopo la manovra.<br>");
+    // L'orchestratore ha già inviato l'alert WhatsApp ROSSO se siamo qui.
+    exit("🛑 INTERRUZIONE: Sistema critico non ripristinato. Intervento manuale richiesto.<br>");
 }
+
+exit;
 
 try {
 	// 1. GENERAZIONE BATCH ID

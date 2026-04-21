@@ -66,7 +66,7 @@ class Logger
             #$this->logname = $default_log_path.'/'.date('Ymd_His').'.log';
             $this->logname = $default_log_path.'/'.date('Ymd').'.log';
             
-            $this->log_handle = fopen($this->logname, 'w'); // mettere "a"
+            $this->log_handle = fopen($this->logname, 'a'); // Corretto da 'w' a 'a' per append
         }
         else
         {

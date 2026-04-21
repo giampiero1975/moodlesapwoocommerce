@@ -133,7 +133,7 @@ class costanti {
             'login' => 'formazioneoss@mei.it',
             'pass' => '$rzTTP%25'
         ],
-        # 'mdl_ati14_es'=>['corso'=>'ATI14 EspaÒa','login'=>'info@mei.it','pass'=>''],
+        # 'mdl_ati14_es'=>['corso'=>'ATI14 EspaÔøΩa','login'=>'info@mei.it','pass'=>''],
     ];
     
     // ---- NUOVA SEZIONE DA AGGIUNGERE ----
@@ -169,3 +169,6 @@ echo "corso: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['corso'];
 echo "login: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['login'];
 echo "pass: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['pass'];
 */
+    // WHATSAPP NOTIFICATIONS (CallMeBot)
+    define('WHATSAPP_PHONE', '393476806154'); // Numero senza + per conformit√† API CallMeBot
+    define('WHATSAPP_API_KEY', '4185403');       // Inserire API Key di CallMeBot
