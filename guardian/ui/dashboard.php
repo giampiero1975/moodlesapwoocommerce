@@ -7,6 +7,8 @@ if (!defined('PROJECT_ROOT_PATH')) {
     define('PROJECT_ROOT_PATH', dirname(__DIR__, 2) . '/');
 }
 
+date_default_timezone_set('Europe/Rome');
+
 include_once PROJECT_ROOT_PATH . 'Model/SapInvoiceHandler.php';
 include_once PROJECT_ROOT_PATH . 'Model/SapDiagnosticHandler.php';
 
