@@ -17,12 +17,29 @@ $sapHandler = new SapDiagnosticHandler();
 // Gestione Azioni Rapide
 $action_result = null;
 if (isset($_POST['action'])) {
+    // Prima di eseguire, catturiamo lo stato iniziale per il log
+    $stats_pre = $sapHandler->getCombinedSystemHealth();
+    
     if ($_POST['action'] === 'clean') {
-        $action_result = ["msg" => "PULIZIA DB Eseguita", "res" => $sapHandler->runSqlCleanup()];
+        $id_log = $sapHandler->iniziaLog('MANUALE', $stats_pre, 'Dashboard: Pulizia DB');
+        $res = $sapHandler->runSqlCleanup();
+        $sapHandler->aggiornaStatoJob($id_log, (strpos($res, 'ERRORE') === false));
+        
+        $stats_post = $sapHandler->getCombinedSystemHealth();
+        $sapHandler->chiudiLog($id_log, $stats_post['total_time_ms'], true, null, $stats_post['stato']);
+        
+        $action_result = ["msg" => "PULIZIA DB Eseguita", "res" => $res];
     } elseif ($_POST['action'] === 'reset') {
-        $action_result = ["msg" => "RESET SAP Inviato", "res" => $sapHandler->runSqlReset()];
-    } elseif ($_POST['action'] === 'iis_reset') {
-        $action_result = ["msg" => "RESET IIS Inviato", "res" => $sapHandler->runIisReset(), "type" => "iis"];
+        $id_log = $sapHandler->iniziaLog('MANUALE', $stats_pre, 'Dashboard: Reset Globale SAP');
+        $res = $sapHandler->runSqlReset();
+        $sapHandler->aggiornaStatoJob($id_log, (strpos($res, 'ERRORE') === false));
+        
+        // Per il reset globale, diamo un po' di tempo prima di verificare lo stato post
+        sleep(2); 
+        $stats_post = $sapHandler->getCombinedSystemHealth();
+        $sapHandler->chiudiLog($id_log, $stats_post['total_time_ms'], true, null, $stats_post['stato']);
+        
+        $action_result = ["msg" => "RESET GLOBALE Inviato", "res" => $res];
     }
 }
 
