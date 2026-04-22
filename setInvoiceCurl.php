@@ -9,7 +9,7 @@ if (!defined('PROJECT_ROOT_PATH')) {
 
 require_once 'guardian/check.php';
 
-exit;
+// --- START BATCH ---
 
 try {
 	// 1. GENERAZIONE BATCH ID
