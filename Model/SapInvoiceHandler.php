@@ -122,12 +122,55 @@ class SapServiceHandler {
         ];
     }
 
+    public function pingSapSOAP() {
+        $url = "http://192.168.10.44/wsToSAP/B1Sync.asmx?reqType=get&objType=ping";
+        $xml_data = '<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:loc="http://localhost/">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <loc:BOsync>
+         <loc:reqType>get</loc:reqType>
+         <loc:objType>ping</loc:objType>
+         <loc:docXml>&lt;BOM&gt;&lt;BO&gt;&lt;AdmInfo&gt;&lt;requestUser&gt;manager&lt;/requestUser&gt;&lt;/AdmInfo&gt;&lt;/BO&gt;&lt;/BOM&gt;</loc:docXml>
+      </loc:BOsync>
+   </soapenv:Body>
+</soapenv:Envelope>';
+
+        $headers = array(
+            "Content-Type: text/xml; charset=utf-8",
+            "SOAPAction: \"http://localhost/BOsync\"",
+            "Content-length: ".strlen($xml_data)
+        );
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $xml_data);
+
+        $start = microtime(true);
+        $res = curl_exec($ch);
+        $info = curl_getinfo($ch);
+        curl_close($ch);
+
+        $ms = round((microtime(true) - $start) * 1000, 2);
+        $isAlive = ($info['http_code'] > 0);
+
+        return [
+            'is_alive' => $isAlive,
+            'total_time_ms' => $ms
+        ];
+    }
+
     public function getCombinedSystemHealth() {
         $web = $this->pingWebService();
         $db = $this->pingDatabase();
+        $soap = $this->pingSapSOAP();
         
-        $worst_ping = max($web['total_time_ms'], $db['total_time_ms']);
-        $is_alive = $web['is_alive'] && $db['is_alive'];
+        $worst_ping = max($web['total_time_ms'], $db['total_time_ms'], $soap['total_time_ms']);
+        $is_alive = $web['is_alive'] && $db['is_alive'] && $soap['is_alive'];
         
         if ($db['is_alive'] && !$db['deep_test'] && $worst_ping < 2000) {
             $worst_ping = 2500; // Forziamo rosso se DB è timeoutato/bloccato pesantemente su query
@@ -142,7 +185,8 @@ class SapServiceHandler {
             'total_time_ms' => $worst_ping,
             'stato' => ($worst_ping > 2000) ? "ROSSO" : (($worst_ping > 200) ? "GIALLO" : "VERDE"),
             'web' => $web,
-            'db' => $db
+            'db' => $db,
+            'soap' => $soap
         ];
     }
 
@@ -159,6 +203,9 @@ class SapServiceHandler {
         $ping = $stats['total_time_ms'];
         if (!$stats['is_alive']) { $ping = 9999; }
         
+        // Logga sempre ed a prescindere la telemetria in formato JSON per il Grafico (Separato dal DB)
+        $this->logTelemetry($stats);
+        
         $final_label = "";
         $ps_info = "Check non eseguito";
         
@@ -173,7 +220,7 @@ class SapServiceHandler {
                     echo "   INFO: Notifica WhatsApp ROSSA: " . strip_tags($res_wa) . "<br>";
                 }
 
-                $id_log = $this->iniziaLog('ROSSO', $ping, 'Reset Remoto Job SQL');
+                $id_log = $this->iniziaLog('ROSSO', $stats, 'Recupero di Emergenza SAP/SQL');
                 $res_job = $this->runSqlReset();
                 
                 if (strpos($res_job, 'ERRORE') !== false) {
@@ -215,7 +262,7 @@ class SapServiceHandler {
                     echo "   INFO: Notifica WhatsApp GIALLA: " . strip_tags($res_wa) . "<br>";
                 }
 
-                $id_log = $this->iniziaLog('GIALLO', $ping, 'Pulizia SQL');
+                $id_log = $this->iniziaLog('GIALLO', $stats, 'Pulizia Connessioni Database');
                 $res_cleanup = $this->runSqlCleanup();
                 $this->aggiornaStatoJob($id_log, (strpos($res_cleanup, 'ERRORE') === false));
                 
@@ -230,15 +277,23 @@ class SapServiceHandler {
                 echo "2. INFO: Sistema operativo.<br>";
                 // Assicuriamoci che anti-spam sappia che siamo in VERDE per resettare i futuri alert
                 $this->checkAntiSpam('VERDE');
-                // Se tutto va bene, logghiamo una "Salute Verde" ogni 60 minuti per il grafico
-                $this->logHeartbeat($ping);
                 return true;
         }
     }
     
-    public function iniziaLog($colore, $ping, $azione) {
-        $sql = "INSERT INTO log_ws_sap (data_check, ping_result, ping_delay, action, result) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, 'IN CORSO')";
-        $this->dbLocal->insCrm($sql, [$colore, $ping, $azione]);
+    public function iniziaLog($colore, $ping_or_stats, $azione) {
+        $web_ping = 0; $db_ping = 0; $soap_ping = 0; $ping = 0;
+        if (is_array($ping_or_stats)) {
+            $web_ping = cloneValue($ping_or_stats['web']['total_time_ms'] ?? 0);
+            $db_ping = cloneValue($ping_or_stats['db']['total_time_ms'] ?? 0);
+            $soap_ping = cloneValue($ping_or_stats['soap']['total_time_ms'] ?? 0);
+            $ping = $ping_or_stats['total_time_ms'] ?? 0;
+        } else {
+            $ping = $ping_or_stats;
+        }
+
+        $sql = "INSERT INTO log_ws_sap (data_check, ping_result, ping_delay, db_ping_delay, soap_ping_delay, action, result) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, 'IN CORSO')";
+        $this->dbLocal->insCrm($sql, [$colore, (float)$ping, (float)$db_ping, (float)$soap_ping, $azione]);
         $res = $this->dbLocal->select("SELECT MAX(id) as last_id FROM log_ws_sap");
         return $res[0]['last_id'] ?? 0;
     }
@@ -371,7 +426,7 @@ class SapServiceHandler {
     }
 
     private function checkAntiSpam($newState) {
-        $file = PROJECT_ROOT_PATH . 'logs/last_whatsapp_alert.json';
+        $file = PROJECT_ROOT_PATH . 'guardian/data/state.json';
         $data = ['last_time' => 0, 'last_state' => 'GREEN'];
         
         if (file_exists($file)) {
@@ -406,7 +461,7 @@ class SapServiceHandler {
         if ($shouldSend) {
             $data['last_time'] = $now;
             $data['last_state'] = $newState;
-            file_put_contents($file, json_encode($data));
+            file_put_contents($file, json_encode($data), LOCK_EX);
             return true;
         }
         
@@ -414,31 +469,50 @@ class SapServiceHandler {
         // aggiorniamo comunque lo stato interno per la prossima volta
         if ($data['last_state'] !== $newState) {
             $data['last_state'] = $newState;
-            file_put_contents($file, json_encode($data));
+            file_put_contents($file, json_encode($data), LOCK_EX);
         }
         
         return false;
     }
 
     /**
-     * Logga uno stato VERDE simbolico se non ci sono stati log recenti (Heartbeat)
-     * Serve per tenere "piatta" la linea del grafico quando tutto va bene.
+     * Logga silenziosamente la telemetria per il grafico in un JSON dedicato.
+     * Salva fino a 96 records (48 log/giorno x 2 giorni) e scollega la telemetria dal DB.
      */
-    private function logHeartbeat($ping) {
-        // Controlliamo se abbiamo già loggato qualcosa negli ultimi 30 minuti
-        $file = PROJECT_ROOT_PATH . 'logs/last_heartbeat.json';
+    private function logTelemetry($stats) {
+        $file = PROJECT_ROOT_PATH . 'guardian/data/telemetry.json';
         $now = time();
-        $last_heartbeat = 0;
+        $history = [];
         
         if (file_exists($file)) {
-            $last_heartbeat = (int)file_get_contents($file);
+            $json = file_get_contents($file);
+            $history = json_decode($json, true) ?: [];
         }
         
-        // Logghiamo una baseline verde ogni 30 minuti
-        if ($now - $last_heartbeat > 1800) {
-            $sql = "INSERT INTO log_ws_sap (data_check, ping_result, ping_delay, action, result) VALUES (CURRENT_TIMESTAMP, '🟢 VERDE', ?, 'SISTEMA OK', 'COMPLETATO')";
-            $this->dbLocal->insCrm($sql, [(float)$ping]);
-            file_put_contents($file, $now);
+        // Evitiamo spam se si testano script in loop manualmente, permettiamo 1 entry ogni 15 minuti.
+        // Ma se lo stato NON e' verde, forziamo sempre l'inserimento per evidenziare il problema.
+        $stato = $stats['is_alive'] ? $stats['stato'] : 'OFFLINE';
+        $last_time = end($history)['timestamp'] ?? 0;
+        
+        if ($stato === 'VERDE' && ($now - $last_time < 900)) {
+            return;
         }
+
+        $history[] = [
+            'timestamp' => $now,
+            'date' => date('d/m H:i', $now),
+            'web' => round($stats['web']['total_time_ms'] ?? 0, 1),
+            'db' => round($stats['db']['total_time_ms'] ?? 0, 1),
+            'soap' => round($stats['soap']['total_time_ms'] ?? 0, 1),
+            'status' => $stato
+        ];
+
+        // Manteniamo esattamente 96 log (2 giorni)
+        if (count($history) > 96) {
+            $history = array_slice($history, -96);
+        }
+
+        file_put_contents($file, json_encode($history), LOCK_EX);
     }
 }
+function cloneValue($val) { return $val; }

@@ -4,12 +4,11 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 if (!defined('PROJECT_ROOT_PATH')) {
-    define('PROJECT_ROOT_PATH', __DIR__ . '/');
+    define('PROJECT_ROOT_PATH', dirname(__DIR__, 2) . '/');
 }
 
-include_once 'Model/SapInvoiceHandler.php';
-
-include_once 'Model/SapDiagnosticHandler.php';
+include_once PROJECT_ROOT_PATH . 'Model/SapInvoiceHandler.php';
+include_once PROJECT_ROOT_PATH . 'Model/SapDiagnosticHandler.php';
 
 $sapHandler = new SapDiagnosticHandler();
 
@@ -342,7 +341,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                 <input type="checkbox" id="autoRefreshToggle">
                 <span class="slider"></span>
             </label>
-            <a href="diagnosis.php" class="btn btn-refresh" style="padding: 5px 10px;">Aggiorna Ora</a>
+            <a href="dashboard.php" class="btn btn-refresh" style="padding: 5px 10px;">Aggiorna Ora</a>
         </div>
     </header>
 
@@ -355,126 +354,156 @@ $data = $sapHandler->getFullDiagnostics($filters);
     </div>
     <?php endif; ?>
 
-    <!-- Sezione Uptime Processi -->
-    <div class="uptime-box" style="flex-direction: column; align-items: flex-start; padding: 20px;">
-        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <span class="uptime-label" style="font-size: 16px; font-weight: bold; color: var(--secondary);">📡 Monitoraggio Processi Real-time</span>
-            <div class="btn-group">
-                <?php 
-                    $hasSap = !empty($data['uptime']['SAP']['instances']);
-                    $hasIis = !empty($data['uptime']['IIS']['instances']);
-                ?>
-                <span class="badge <?= $hasSap ? 'badge-verde' : 'badge-rosso' ?>">SAP STATUS: <?= $hasSap ? 'ACTIVE' : 'OFFLINE' ?></span>
-                <span class="badge <?= $hasIis ? 'badge-verde' : 'badge-rosso' ?>">IIS STATUS: <?= $hasIis ? 'ACTIVE' : 'OFFLINE' ?></span>
+    <div style="background: #eef2f5; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+        <h2 style="margin-top:0; color: #2c3e50; font-size: 18px; border-bottom: 2px solid #bdc3c7; padding-bottom: 10px;">
+            🛡️ SETTORE "AZIONE" (Orchestratore)
+        </h2>
+        <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 15px;">
+            Questi sono gli unici valori reali utilizzati dal Guardiano per stabilire se fermare il batch e lanciare l'allarme WhatsApp.
+        </p>
+
+        <div class="grid">
+            <!-- Card SAP SOAP -->
+            <div class="card" style="border-top: 5px solid #9b59b6 !important;">
+                <div class="card-header">
+                    <span class="card-title">🔌 SAP DI-Server (SOAP)</span>
+                    <?php 
+                        $s_stato = 'OFFLINE'; $s_lbl = 'badge-offline';
+                        if (isset($data['soap'])) {
+                            $s_stato = $data['soap']['is_alive'] ? (($data['soap']['total_time_ms'] > 2000) ? 'ROSSO' : 'VERDE') : 'OFFLINE';
+                            if ($s_stato == 'VERDE') $s_lbl = 'badge-verde';
+                            elseif ($s_stato == 'ROSSO') $s_lbl = 'badge-rosso';
+                        }
+                    ?>
+                    <span class="badge <?= $s_lbl ?>"><?= $s_stato ?></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Connessione DI-Server:</span>
+                    <span class="stat-value"><?= (isset($data['soap']) && $data['soap']['is_alive']) ? 'Attivo' : 'Offline' ?></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Latenza Reale XML:</span>
+                    <span class="stat-value"><?= $data['soap']['total_time_ms'] ?? 0 ?> ms</span>
+                </div>
+                <div class="card-tip" style="background:#9b59b61a; color:#8e44ad; border:1px solid #9b59b6;">💡 Veritiero indicatore. Se > 2000ms scatta l'allarme bloccante.</div>
+            </div>
+
+            <!-- Card Database -->
+            <div class="card border-yellow">
+                <div class="card-header">
+                    <span class="card-title">🗄 Database (MSSQL)</span>
+                    <?php 
+                        $d_stato = $data['db']['stato'];
+                        if ($d_stato == 'VERDE') $d_lbl = 'badge-verde';
+                        elseif ($d_stato == 'GIALLO') $d_lbl = 'badge-giallo';
+                        elseif ($d_stato == 'ROSSO') $d_lbl = 'badge-rosso';
+                        else $d_lbl = 'badge-offline';
+                    ?>
+                    <span class="badge <?= $d_lbl ?>"><?= $d_stato ?></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Deep Test (Table OINV):</span>
+                    <span class="stat-value"><?= $data['db']['deep_test'] ? '🟢 Passato' : '🔴 Fallito' ?></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Tempo Query Test:</span>
+                    <span class="stat-value"><?= $data['db']['query_time_ms'] ?> ms</span>
+                </div>
+                <div class="card-tip tip-yellow">💡 Veritiero indicatore di blocco intermedio. Se > 200ms scatta il GIALLO e pulisce le query pendenti. Se la "Query Test" va in timeout (2500ms) scatta il ROSSO.</div>
             </div>
         </div>
-
-        <?php if (!is_array($data['uptime']) || isset($data['uptime']['error'])): ?>
-            <div class="alert alert-danger" style="width: 100%;">
-                <?= htmlspecialchars($data['uptime']['error'] ?? 'Errore nel caricamento dei processi') ?>
-            </div>
-        <?php else: ?>
-            <div class="process-groups">
-                <?php foreach(['SAP', 'IIS'] as $type): 
-                    $group = $data['uptime'][$type]; 
-                    $bClass = ($type === 'SAP') ? 'border-red' : 'border-azure';
-                    $tClass = ($type === 'SAP') ? 'tip-red' : 'tip-azure';
-                    $tMsg = ($type === 'SAP') ? 'In caso di errore usa il tasto ROSSO' : 'In caso di errore usa il tasto AZZURRO';
-                ?>
-                <div class="process-group-card <?= $bClass ?>">
-                    <div class="process-group-header">
-                        <span><?= $group['icon'] ?></span>
-                        <span><?= $group['label'] ?></span>
-                        <small style="margin-left: auto; font-weight: normal; font-size: 10px; color: #999;">
-                            (<?= count($group['instances']) ?> istanze)
-                        </small>
-                    </div>
-                    <?php if (empty($group['instances'])): ?>
-                        <div style="color: #dc3545; font-size: 12px; font-style: italic; padding: 10px 0;">Nessuna istanza rilevata</div>
-                    <?php else: ?>
-                        <?php foreach($group['instances'] as $inst): ?>
-                        <div class="process-instance">
-                            <span class="name-badge"><?= htmlspecialchars($inst['name']) ?></span>
-                            <span class="time-badge"><?= htmlspecialchars($inst['start']) ?></span>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                    <div class="card-tip <?= $tClass ?>">💡 <?= $tMsg ?></div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
     </div>
 
-    <!-- Main Grid: Web Server & Database -->
-    <div class="grid">
-        <!-- Card Web Server -->
-        <div class="card border-azure">
-            <div class="card-header">
-                <span class="card-title">🌐 SAP Web Gateway (IIS)</span>
-                <?php 
-                    $h_stato = str_replace(array('🟢 ', '🟡 ', '🔴 ', '⚫ '), '', $data['http']['stato']);
-                    $h_class = strtolower($h_stato);
-                    if ($h_class == 'verde') $lbl = 'badge-verde';
-                    elseif ($h_class == 'giallo') $lbl = 'badge-giallo';
-                    elseif ($h_class == 'rosso') $lbl = 'badge-rosso';
-                    else $lbl = 'badge-offline';
-                ?>
-                <span class="badge <?= $lbl ?>"><?= $h_stato ?></span>
+    <!-- SEZIONE 2: TELEMETRIA E DIAGNOSTICA -->
+    <div style="background: #f8fbff; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+        <h2 style="margin-top:0; color: #2c3e50; font-size: 18px; border-bottom: 2px solid #bdc3c7; padding-bottom: 10px;">
+            📊 SETTORE "TELEMETRIA" (Dashboard Multidimensionale)
+        </h2>
+        <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 15px;">
+            Dati informativi e panoramica dei processi per agevolare l'indagine. L'Orchestratore non vi agisce direttamente.
+        </p>
+
+        <!-- Sezione Uptime Processi -->
+        <div class="uptime-box" style="flex-direction: column; align-items: flex-start; padding: 20px;">
+            <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <span class="uptime-label" style="font-size: 16px; font-weight: bold; color: var(--secondary);">📡 Processi Windows Real-time</span>
+                <div class="btn-group">
+                    <?php 
+                        $hasSap = !empty($data['uptime']['SAP']['instances']);
+                        $hasIis = !empty($data['uptime']['IIS']['instances']);
+                    ?>
+                    <span class="badge <?= $hasSap ? 'badge-verde' : 'badge-rosso' ?>">SAP B1: <?= $hasSap ? 'ACTIVE' : 'OFFLINE' ?></span>
+                    <span class="badge <?= $hasIis ? 'badge-verde' : 'badge-rosso' ?>">IIS WWP: <?= $hasIis ? 'ACTIVE' : 'OFFLINE' ?></span>
+                </div>
             </div>
-            <div class="stat-row">
-                <span class="stat-label">Stato Connessione:</span>
-                <span class="stat-value"><?= $data['http']['is_alive'] ? 'Attivo' : 'Offline' ?></span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Latenza Risposta:</span>
-                <span class="stat-value"><?= $data['http']['total_time_ms'] ?> ms</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Tentativi Ping:</span>
-                <span class="stat-value"><?= $data['http']['tentativi'] ?? 1 ?></span>
-            </div>
-            <div class="card-tip tip-azure">💡 Se questo riquadro è rosso, il server Windows non accetta connessioni web. Prova il tasto Azzurro.</div>
+
+            <?php if (!is_array($data['uptime']) || isset($data['uptime']['error'])): ?>
+                <div class="alert alert-danger" style="width: 100%;">
+                    <?= htmlspecialchars($data['uptime']['error'] ?? 'Errore nel caricamento dei processi') ?>
+                </div>
+            <?php else: ?>
+                <div class="process-groups">
+                    <?php foreach(['SAP', 'IIS'] as $type): 
+                        $group = $data['uptime'][$type]; 
+                        $bClass = ($type === 'SAP') ? 'border-red' : 'border-azure';
+                        $tClass = ($type === 'SAP') ? 'tip-red' : 'tip-azure';
+                        $tMsg = ($type === 'SAP') ? 'In caso di errore usa il tasto ROSSO' : 'In caso di errore usa il tasto AZZURRO';
+                    ?>
+                    <div class="process-group-card <?= $bClass ?>">
+                        <div class="process-group-header">
+                            <span><?= $group['icon'] ?></span>
+                            <span><?= $group['label'] ?></span>
+                            <small style="margin-left: auto; font-weight: normal; font-size: 10px; color: #999;">
+                                (<?= count($group['instances']) ?> istanze)
+                            </small>
+                        </div>
+                        <?php if (empty($group['instances'])): ?>
+                            <div style="color: #dc3545; font-size: 12px; font-style: italic; padding: 10px 0;">Nessuna istanza rilevata</div>
+                        <?php else: ?>
+                            <?php foreach($group['instances'] as $inst): ?>
+                            <div class="process-instance">
+                                <span class="name-badge"><?= htmlspecialchars($inst['name']) ?></span>
+                                <span class="time-badge"><?= htmlspecialchars($inst['start']) ?></span>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </div>
 
-        <!-- Card Database -->
-        <div class="card border-yellow">
-            <div class="card-header">
-                <span class="card-title">🗄 Database (MSSQL)</span>
-                <?php 
-                    $d_stato = $data['db']['stato'];
-                    if ($d_stato == 'VERDE') $d_lbl = 'badge-verde';
-                    elseif ($d_stato == 'GIALLO') $d_lbl = 'badge-giallo';
-                    elseif ($d_stato == 'ROSSO') $d_lbl = 'badge-rosso';
-                    else $d_lbl = 'badge-offline';
-                ?>
-                <span class="badge <?= $d_lbl ?>"><?= $d_stato ?></span>
+        <div class="grid" style="grid-template-columns: 1fr;">
+            <!-- Card Web Server (Spinto fuori dall'orchestratore, solo telemetria) -->
+            <div class="card border-azure">
+                <div class="card-header">
+                    <span class="card-title">🌐 SAP Web Gateway (IIS)</span>
+                    <?php 
+                        $h_stato = str_replace(array('🟢 ', '🟡 ', '🔴 ', '⚫ '), '', $data['http']['stato']);
+                        $h_class = strtolower($h_stato);
+                        if ($h_class == 'verde') $lbl = 'badge-verde';
+                        elseif ($h_class == 'giallo') $lbl = 'badge-giallo';
+                        elseif ($h_class == 'rosso') $lbl = 'badge-rosso';
+                        else $lbl = 'badge-offline';
+                    ?>
+                    <span class="badge <?= $lbl ?>"><?= $h_stato ?></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">HTTP Endp:</span>
+                    <span class="stat-value"><?= $data['http']['is_alive'] ? 'Attivo' : 'Offline' ?></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Latenza Risposta:</span>
+                    <span class="stat-value"><?= $data['http']['total_time_ms'] ?> ms</span>
+                </div>
             </div>
-            <div class="stat-row">
-                <span class="stat-label">Deep Test (Table OINV):</span>
-                <span class="stat-value"><?= $data['db']['deep_test'] ? '🟢 Passato' : '🔴 Fallito' ?></span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Tempo Connessione:</span>
-                <span class="stat-value"><?= $data['db']['connection_time_ms'] ?> ms</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Tempo Query Test:</span>
-                <span class="stat-value"><?= $data['db']['query_time_ms'] ?> ms</span>
-            </div>
-            <?php if ($data['db']['errore']): ?>
-            <div style="font-size:11px; color:var(--color-rosso); margin-top:10px; border-top:1px solid #eee; padding-top:5px;">
-                ⚠️ <?= htmlspecialchars($data['db']['errore']) ?>
-            </div>
-            <?php endif; ?>
-            <div class="card-tip tip-yellow">💡 In caso di errore usa il tasto GIALLO</div>
         </div>
     </div>
 
     <!-- Grafico Latenza -->
     <div class="card" style="margin-bottom: 30px;">
         <div class="card-header">
-            <span class="card-title">📉 Andamento Latenza (ultimi 20 log)</span>
+            <span class="card-title">📉 Telemetria Real-Time (Ultimi 2 giorni - Cron-Check)</span>
         </div>
         <canvas id="latencyChart" height="100"></canvas>
     </div>
@@ -513,7 +542,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                 </select>
                 <button type="submit" class="btn btn-refresh" style="padding: 4px 10px;">Filtra</button>
                 <?php if(!empty($filters['date']) || $filters['result'] !== 'Tutti'): ?>
-                    <a href="diagnosis.php" style="color: var(--color-rosso); text-decoration: none;">Reset</a>
+                    <a href="dashboard.php" style="color: var(--color-rosso); text-decoration: none;">Reset</a>
                 <?php endif; ?>
             </form>
         </div>
@@ -537,8 +566,9 @@ $data = $sapHandler->getFullDiagnostics($filters);
                         <td><strong><?= htmlspecialchars($log['action']) ?></strong></td>
                         <td>
                             <span class="badge <?= stripos($log['ping_result'], 'VERDE')!==false ? 'badge-verde' : (stripos($log['ping_result'], 'GIALLO')!==false ? 'badge-giallo' : 'badge-rosso') ?>">
-                                <?= $log['ping_result'] ?> (<?= round($log['ping_delay'],0) ?>ms)
-                            </span>
+                                <?= $log['ping_result'] ?>
+                            </span><br>
+                            <small style="color: #666; font-size: 11px;">IIS: <?= round((float)($log['ping_delay'] ?? 0),0) ?>ms | DB: <?= round((float)($log['db_ping_delay'] ?? 0),0) ?>ms | SAP: <?= round((float)($log['soap_ping_delay'] ?? 0),0) ?>ms</small>
                         </td>
                         <td>
                             <?php if ($log['post_ping_result']): ?>
@@ -601,26 +631,43 @@ $data = $sapHandler->getFullDiagnostics($filters);
 
     // Rendering Grafico Latenza
     const ctx = document.getElementById('latencyChart').getContext('2d');
-    const chartData = <?= json_encode(array_reverse($data['chart_logs'])) ?>;
+    const chartData = <?= json_encode($data['chart_logs']) ?>;
     
     new Chart(ctx, {
         type: 'line',
         data: {
-            labels: chartData.map(l => l.data_check.split(' ')[1]), // Mostra solo l'ora
-            datasets: [{
-                label: 'Ping Latenza (ms)',
-                data: chartData.map(l => l.ping_delay),
-                borderColor: '#3498db',
-                backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-                pointBackgroundColor: chartData.map(l => (l.result === 'COMPLETATO' ? '#27ae60' : '#e74c3c'))
-            }]
+            labels: chartData.map(l => l.date),
+            datasets: [
+                {
+                    label: 'IIS Web (ms)',
+                    data: chartData.map(l => l.web),
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 3
+                },
+                {
+                    label: 'Database SQL (ms)',
+                    data: chartData.map(l => l.db),
+                    borderColor: '#f1c40f',
+                    backgroundColor: 'rgba(241, 196, 15, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 3
+                },
+                {
+                    label: 'SAP SOAP (ms)',
+                    data: chartData.map(l => l.soap),
+                    borderColor: '#9b59b6',
+                    backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 4,
+                    yAxisID: 'y'
+                }
+            ]
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { display: true } },
             scales: {
                 y: { beginAtZero: true, title: { display: true, text: 'ms' } },
                 x: { grid: { display: false } }

@@ -27,12 +27,11 @@ class SapDiagnosticHandler extends SapServiceHandler {
                 $params[] = $target;
             }
 
-            $sql = "SELECT id, data_check, action, ping_result, ping_delay, result, post_ping_result 
+            $sql = "SELECT id, data_check, action, ping_result, ping_delay, db_ping_delay, soap_ping_delay, result, post_ping_result 
                     FROM log_ws_sap " . $where . "
                     ORDER BY id DESC 
                     LIMIT " . (int)$limit;
             
-            return $this->dbLocal->select($sql, $params);
             return $this->dbLocal->select($sql, $params);
         } catch (Exception $e) {
             return [];
@@ -45,17 +44,25 @@ class SapDiagnosticHandler extends SapServiceHandler {
     public function getFullDiagnostics($filters = []) {
         $stats_http = $this->pingWebService();
         $stats_db = $this->pingDatabase();
+        $stats_soap = $this->pingSapSOAP();
         $uptime = $this->getSystemUptimeCheck();
         
-        $logs_filtered = $this->getRecentLogs(15, $filters);
-        $logs_chart = $this->getRecentLogs(20); 
+        // Carichiamo la telemetria JSON
+        $telemetry_file = PROJECT_ROOT_PATH . 'guardian/data/telemetry.json';
+        $chart_logs = [];
+        if (file_exists($telemetry_file)) {
+            $chart_logs = json_decode(file_get_contents($telemetry_file), true) ?: [];
+        }
         
+        $logs_filtered = $this->getRecentLogs(15, $filters);
+
         return [
             'http' => $stats_http,
             'db' => $stats_db,
+            'soap' => $stats_soap,
             'uptime' => $uptime,
             'logs' => $logs_filtered,
-            'chart_logs' => $logs_chart
+            'chart_logs' => $chart_logs
         ];
     }
 }
