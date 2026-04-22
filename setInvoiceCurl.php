@@ -9,8 +9,13 @@ if (!defined('PROJECT_ROOT_PATH')) {
 
 require_once 'guardian/check.php';
 
-// --- START BATCH ---
+// Se il sistema non è perfetto (VERDE), il Guardiano agisce e poi interrompiamo l'esecuzione.
+if ($stats['stato'] !== 'VERDE') {
+    $sapHandler->gestisciStatoServer($stats);
+    exit("🛑 GUARDIANO: Sistema non pronto (Stato: {$stats['stato']}). Recovery avviata, attivo stop di sicurezza.\n");
+}
 
+// --- START BATCH ---
 try {
 	// 1. GENERAZIONE BATCH ID
     $batchID = "PRENOTATO_" . date("Ymd_His");

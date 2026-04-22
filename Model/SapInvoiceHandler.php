@@ -250,8 +250,7 @@ class SapServiceHandler {
                 }
                 
                 $this->chiudiLog($id_log, $ms_post, $is_success, $ps_info, $final_label);
-                // Il sistema ha eseguito il ripristino, ma per sicurezza usciamo e aspettiamo il prossimo cron
-                return false; 
+                return $is_success;
                 
             case ($ping >= 200 && $ping <= 2000):
                 echo "2. AZIONE: Latenza rilevata (GIALLO). Eseguo Pulizia...<br>";
@@ -272,8 +271,7 @@ class SapServiceHandler {
                 $final_label = $post_stats['stato'];
                 
                 $this->chiudiLog($id_log, $post_stats['total_time_ms'], true, $ps_info, $final_label);
-                // Abbiamo pulito il DB, ma fermiamo l'esecuzione attuale per prudenza
-                return false; 
+                return true;
                 
             default:
                 echo "2. INFO: Sistema operativo.<br>";
