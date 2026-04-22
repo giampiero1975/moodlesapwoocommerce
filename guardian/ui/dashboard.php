@@ -222,8 +222,6 @@ $data = $sapHandler->getFullDiagnostics($filters);
         .btn-clean:hover { background: #d4ac0d; }
         .btn-reset { background: #e74c3c; color: #fff; }
         .btn-reset:hover { background: #c0392b; }
-        .btn-iis { background: #00bcd4; color: #fff; }
-        .btn-iis:hover { background: #00acc1; }
         .btn-refresh { background: #95a5a6; color: #fff; }
 
         /* Guide Widget */
@@ -241,7 +239,6 @@ $data = $sapHandler->getFullDiagnostics($filters);
         .guide-item { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
         .dot-yellow { background: #f1c40f; }
-        .dot-azure { background: #00bcd4; }
         .dot-red { background: #e74c3c; }
 
         /* Logs Table */
@@ -515,16 +512,14 @@ $data = $sapHandler->getFullDiagnostics($filters);
         <span class="actions-title">⚡ Azioni Rapide:</span>
         <form method="post" style="display: flex; gap: 15px;">
             <button type="submit" name="action" value="clean" class="btn btn-clean">LANCIA CLEAN DB</button>
-            <button type="submit" name="action" value="iis_reset" class="btn btn-iis">LANCIA RESET IIS</button>
-            <button type="submit" name="action" value="reset" class="btn btn-reset">LANCIA RESET SAP</button>
+            <button type="submit" name="action" value="reset" class="btn btn-reset">LANCIA RESET GLOBALE SAP</button>
         </form>
 
         <div class="actions-guide">
-            <div class="guide-item"><span class="dot dot-yellow"></span> <b>GIALLO</b>: Se il riquadro <b>DATABASE</b> è rosso, premi questo.</div>
-            <div class="guide-item"><span class="dot dot-azure"></span> <b>AZZURRO</b>: Se il riquadro <b>IIS WORKER PROCESSES</b> o <b>SAP WEB GATEWAY</b> è rosso, premi questo.</div>
-            <div class="guide-item"><span class="dot dot-red"></span> <b>ROSSO</b>: Se il riquadro <b>SAP BUSINESS ONE</b> è rosso, premi questo.</div>
+            <div class="guide-item"><span class="dot dot-yellow"></span> <b>GIALLO</b>: Se il riquadro <b>DATABASE</b> è giallo/lento, premi questo per pulire le sessioni SQL pendenti.</div>
+            <div class="guide-item"><span class="dot dot-red"></span> <b>ROSSO</b>: Se il sistema è bloccato o i processi sono OFFLINE, premi questo per il ripristino orchestrato.</div>
             <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 5px; font-style: italic; font-size: 10px; color: #888;">
-                💡 <b>Nota</b>: Se il Web Gateway è rosso, il server Windows non accetta connessioni web. Prova sempre prima l'AZZURRO.
+                💡 <b>Nota</b>: Se il sistema è in stato critico (ROSSO), il tasto <b>RESET GLOBALE</b> avvia la manovra di ripristino sicura orchestrata via SQL.
             </div>
         </div>
     </div>
