@@ -386,9 +386,18 @@ $data = $sapHandler->getFullDiagnostics($filters);
                     <?php 
                         $s_stato = 'OFFLINE'; $s_lbl = 'badge-offline';
                         if (isset($data['soap'])) {
-                            $s_stato = $data['soap']['is_alive'] ? (($data['soap']['total_time_ms'] > 2000) ? 'ROSSO' : 'VERDE') : 'OFFLINE';
-                            if ($s_stato == 'VERDE') $s_lbl = 'badge-verde';
-                            elseif ($s_stato == 'ROSSO') $s_lbl = 'badge-rosso';
+                            $soap_ms = $data['soap']['total_time_ms'];
+                            if (!$data['soap']['is_alive']) { $s_stato = 'OFFLINE'; $s_lbl = 'badge-offline'; }
+                            elseif ($soap_ms > 2000) { $s_stato = 'ROSSO'; $s_lbl = 'badge-rosso'; }
+                            elseif ($soap_ms > 200) { $s_stato = 'GIALLO'; $s_lbl = 'badge-giallo'; }
+                            else { $s_stato = 'VERDE'; $s_lbl = 'badge-verde'; }
+                        }
+                        // Leggo il contatore escalation da state.json
+                        $stateFile = PROJECT_ROOT_PATH . 'guardian/data/state.json';
+                        $consGiallo = 0;
+                        if (file_exists($stateFile)) {
+                            $sj = json_decode(file_get_contents($stateFile), true);
+                            $consGiallo = intval($sj['consecutive_giallo'] ?? 0);
                         }
                     ?>
                     <span class="badge <?= $s_lbl ?>"><?= $s_stato ?></span>
@@ -401,7 +410,16 @@ $data = $sapHandler->getFullDiagnostics($filters);
                     <span class="stat-label">Latenza Reale XML:</span>
                     <span class="stat-value"><?= $data['soap']['total_time_ms'] ?? 0 ?> ms</span>
                 </div>
-                <div class="card-tip" style="background:#9b59b61a; color:#8e44ad; border:1px solid #9b59b6;">💡 Veritiero indicatore. Se > 2000ms scatta l'allarme bloccante.</div>
+                <div class="stat-row">
+                    <span class="stat-label">Cicli GIALLO consecutivi:</span>
+                    <span class="stat-value" style="color: <?= $consGiallo >= 2 ? '#e74c3c' : ($consGiallo == 1 ? '#f39c12' : '#27ae60') ?>">
+                        <?= $consGiallo ?> / 3
+                        <?= $consGiallo >= 3 ? '🚨 ESCALATION IN CORSO' : ($consGiallo > 0 ? '⚠️' : '✅') ?>
+                    </span>
+                </div>
+                <div class="card-tip" style="background:#9b59b61a; color:#8e44ad; border:1px solid #9b59b6;">
+                    💡 LIVELLO 1: &gt;200ms → GIALLO (cleanup DB). LIVELLO 2: 3 cicli GIALLO → ESCALATION reset SAP+IIS. LIVELLO 3: &gt;2000ms → ROSSO diretto.
+                </div>
             </div>
 
             <!-- Card Database -->
@@ -425,7 +443,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                     <span class="stat-label">Tempo Query Test:</span>
                     <span class="stat-value"><?= $data['db']['query_time_ms'] ?> ms</span>
                 </div>
-                <div class="card-tip tip-yellow">💡 Veritiero indicatore di blocco intermedio. Se > 200ms scatta il GIALLO e pulisce le query pendenti. Se la "Query Test" va in timeout (2500ms) scatta il ROSSO.</div>
+                <div class="card-tip tip-yellow">💡 Blocco intermedio: &gt;200ms → GIALLO (pulizia query pendenti). Se "Query Test" va in timeout (2500ms) → ROSSO diretto.</div>
             </div>
         </div>
     </div>
