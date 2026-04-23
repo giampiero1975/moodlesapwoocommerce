@@ -9,6 +9,7 @@ class SapServiceHandler {
     protected $sapModel;
     protected $dbLocal;
     protected $connectionError = false; // Flag per gestire SQL offline
+    private $stateData = null; // Buffer unico per lo stato (state.json)
     
     public function __construct() {
         $this->logger = Logger::get_logger();
@@ -194,6 +195,9 @@ class SapServiceHandler {
         if ($stats === null) {
             $stats = $this->getCombinedSystemHealth();
         }
+        // Logga sempre la telemetria JSON per il grafico (SPOSTATO QUI PER CATTURARE ANCHE ERRORI SQL)
+        $this->logTelemetry($stats);
+
         // --- ESCAPE DI EMERGENZA: Se SQL è giù, esci subito con grazia ---
         if ($this->connectionError) {
             echo "⚠️ EMERGENZA: Il server SQL non risponde (Aggiornamenti in corso?). Salto controllo.<br>";
@@ -203,17 +207,11 @@ class SapServiceHandler {
         $ping = $stats['total_time_ms'];
         if (!$stats['is_alive']) { $ping = 9999; }
         
-        // Logga sempre la telemetria JSON per il grafico
-        $this->logTelemetry($stats);
         
-        // --- PERSISTENZA: Leggo il contatore cicli GIALLO consecutivi da state.json ---
-        $stateFile = PROJECT_ROOT_PATH . 'guardian/data/state.json';
-        $stateData = ['last_time' => 0, 'last_state' => 'GREEN', 'consecutive_giallo' => 0];
-        if (file_exists($stateFile)) {
-            $json = file_get_contents($stateFile);
-            if ($json) $stateData = array_merge($stateData, json_decode($json, true));
-        }
-        $consecutiveGiallo = intval($stateData['consecutive_giallo'] ?? 0);
+        
+        // --- PERSISTENZA: Caricamento stato unico (atomico) ---
+        $this->loadState();
+        $consecutiveGiallo = intval($this->stateData['consecutive_giallo'] ?? 0);
         
         $final_label = "";
         $ps_info = "Check non eseguito";
@@ -225,8 +223,8 @@ class SapServiceHandler {
             // ---------------------------------------------------------------
             case ($ping > 2000):
                 echo "2. AZIONE: Stato CRITICO (ROSSO). Avvio Manovra Rossa...<br>";
-                $stateData['consecutive_giallo'] = 0;
-                file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                $this->stateData['consecutive_giallo'] = 0;
+                $this->saveState();
                 
                 if ($this->checkAntiSpam('ROSSO')) {
                     $msg = "SAP MONITOR - STATO: CRITICO - Ping: {$ping} ms. Avvio manovra di ripristino SAP-IIS.";
@@ -271,8 +269,8 @@ class SapServiceHandler {
             // ---------------------------------------------------------------
             case ($ping >= 200 && $ping <= 2000):
                 $consecutiveGiallo++;
-                $stateData['consecutive_giallo'] = $consecutiveGiallo;
-                file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                $this->stateData['consecutive_giallo'] = $consecutiveGiallo;
+                $this->saveState();
                 
                 // --- LIVELLO 2: ESCALATION dopo 3 cicli GIALLO consecutivi (~90 min) ---
                 if ($consecutiveGiallo >= 3) {
@@ -298,8 +296,8 @@ class SapServiceHandler {
                     $is_success = ($post_stats['is_alive'] === true && $ms_post < 2000);
                     
                     // Reset contatore dopo escalation (sia successo che fallimento)
-                    $stateData['consecutive_giallo'] = 0;
-                    file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                    $this->stateData['consecutive_giallo'] = 0;
+                    $this->saveState();
                     
                     if ($is_success) {
                         $final_label = "RIPRISTINATO_ESCALATION";
@@ -341,8 +339,8 @@ class SapServiceHandler {
             // ---------------------------------------------------------------
             default:
                 echo "2. INFO: Sistema operativo.<br>";
-                $stateData['consecutive_giallo'] = 0;
-                file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                $this->stateData['consecutive_giallo'] = 0;
+                $this->saveState();
                 $this->checkAntiSpam('VERDE');
                 return true;
         }
@@ -492,59 +490,81 @@ class SapServiceHandler {
         return $res;
     }
 
+    /**
+     * Gestisce il cooldown delle notifiche WhatsApp.
+     * Utilizza il buffer di classe $this->stateData per garantire atomicità.
+     */
     private function checkAntiSpam($newState) {
-        $file = PROJECT_ROOT_PATH . 'guardian/data/state.json';
-        $data = ['last_time' => 0, 'last_state' => 'GREEN'];
-        
-        if (file_exists($file)) {
-            $json = file_get_contents($file);
-            if ($json) $data = json_decode($json, true);
-        }
+        if ($this->stateData === null) $this->loadState();
         
         $now = time();
         $isRosso = ($newState === 'ROSSO');
         $isGiallo = ($newState === 'GIALLO');
-        $isVerde = ($newState === 'VERDE' || $newState === 'OFFLINE'); // OFFLINE lo trattiamo come fine dell'azione per ora
+        $isVerde = ($newState === 'VERDE' || $newState === 'OFFLINE');
         
         $shouldSend = false;
 
         // 1. Caso ROSSO: Notifica se cambia da NON-ROSSO a ROSSO, o ogni 60 min
         if ($isRosso) {
-            if ($data['last_state'] !== 'ROSSO' || ($now - $data['last_time'] > 3600)) {
+            if ($this->stateData['last_state'] !== 'ROSSO' || ($now - $this->stateData['last_time'] > 3600)) {
                 $shouldSend = true;
             }
         }
         // 2. Caso RIPRISTINO: Notifica se cambiamo da ROSSO a VERDE
-        elseif ($isVerde && $data['last_state'] === 'ROSSO') {
+        elseif ($isVerde && $this->stateData['last_state'] === 'ROSSO') {
             $shouldSend = true;
         }
         // 3. Caso GIALLO: Notifica se persiste da più di 1 ora o se è nuovo
         elseif ($isGiallo) {
-            if ($data['last_state'] !== 'GIALLO' || ($now - $data['last_time'] > 3600)) {
+            if ($this->stateData['last_state'] !== 'GIALLO' || ($now - $this->stateData['last_time'] > 3600)) {
                 $shouldSend = true;
             }
         }
 
         if ($shouldSend) {
-            $data['last_time'] = $now;
-            $data['last_state'] = $newState;
-            file_put_contents($file, json_encode($data), LOCK_EX);
+            $this->stateData['last_time'] = $now;
+            $this->stateData['last_state'] = $newState;
+            $this->saveState();
             return true;
         }
         
         // Se lo stato è cambiato ma non dobbiamo avvisare (es. da GIALLO a VERDE), 
         // aggiorniamo comunque lo stato interno per la prossima volta
-        if ($data['last_state'] !== $newState) {
-            $data['last_state'] = $newState;
-            file_put_contents($file, json_encode($data), LOCK_EX);
+        if ($this->stateData['last_state'] !== $newState) {
+            $this->stateData['last_state'] = $newState;
+            $this->saveState();
         }
         
         return false;
     }
 
+    private function loadState() {
+        $file = PROJECT_ROOT_PATH . 'guardian/data/state.json';
+        $this->stateData = ['last_time' => 0, 'last_state' => 'VERDE', 'consecutive_giallo' => 0];
+        
+        if (file_exists($file)) {
+            $json = file_get_contents($file);
+            if ($json) {
+                $data = json_decode($json, true);
+                if ($data) {
+                    $this->stateData = array_merge($this->stateData, $data);
+                    // Normalizzazione GREEN -> VERDE per compatibilità legacy
+                    if ($this->stateData['last_state'] === 'GREEN') {
+                        $this->stateData['last_state'] = 'VERDE';
+                    }
+                }
+            }
+        }
+    }
+
+    private function saveState() {
+        $file = PROJECT_ROOT_PATH . 'guardian/data/state.json';
+        file_put_contents($file, json_encode($this->stateData), LOCK_EX);
+    }
+
     /**
      * Logga silenziosamente la telemetria per il grafico in un JSON dedicato.
-     * Salva fino a 96 records (48 log/giorno x 2 giorni) e scollega la telemetria dal DB.
+     * Mantiene un arco temporale di 7 giorni con auto-pulizia basata su timestamp.
      */
     private function logTelemetry($stats) {
         $file = PROJECT_ROOT_PATH . 'guardian/data/telemetry.json';
@@ -556,15 +576,7 @@ class SapServiceHandler {
             $history = json_decode($json, true) ?: [];
         }
         
-        // Evitiamo spam se si testano script in loop manualmente, permettiamo 1 entry ogni 15 minuti.
-        // Ma se lo stato NON e' verde, forziamo sempre l'inserimento per evidenziare il problema.
         $stato = $stats['is_alive'] ? $stats['stato'] : 'OFFLINE';
-        $last_time = end($history)['timestamp'] ?? 0;
-        
-        if ($stato === 'VERDE' && ($now - $last_time < 900)) {
-            return;
-        }
-
         $history[] = [
             'timestamp' => $now,
             'date' => date('d/m H:i', $now),
@@ -574,10 +586,14 @@ class SapServiceHandler {
             'status' => $stato
         ];
 
-        // Manteniamo esattamente 96 log (2 giorni)
-        if (count($history) > 96) {
-            $history = array_slice($history, -96);
-        }
+        // AUTO-PULIZIA: Rimuoviamo i record più vecchi di 7 giorni
+        $sevenDaysAgo = $now - (7 * 24 * 60 * 60);
+        $history = array_filter($history, function($entry) use ($sevenDaysAgo) {
+            return (isset($entry['timestamp']) && $entry['timestamp'] > $sevenDaysAgo);
+        });
+        
+        // Re-indicizziamo l'array per evitare buchi negli indici JSON
+        $history = array_values($history);
 
         file_put_contents($file, json_encode($history), LOCK_EX);
     }
