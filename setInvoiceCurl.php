@@ -9,9 +9,11 @@ if (!defined('PROJECT_ROOT_PATH')) {
 
 require_once 'guardian/check.php';
 
-// Se il sistema non è perfetto (VERDE), il Guardiano agisce e poi interrompiamo l'esecuzione.
-if ($stats['stato'] !== 'VERDE') {
-    $sapHandler->gestisciStatoServer($stats);
+// Chiama SEMPRE gestisciStatoServer: aggiorna telemetry.json, state.json e gestisce anomalie
+$procedi = $sapHandler->gestisciStatoServer($stats);
+
+// Se il sistema non è VERDE (o gestisciStatoServer ha segnalato blocco), interrompiamo il batch
+if ($stats['stato'] !== 'VERDE' || !$procedi) {
     exit("🛑 GUARDIANO: Sistema non pronto (Stato: {$stats['stato']}). Recovery avviata, attivo stop di sicurezza.\n");
 }
 
