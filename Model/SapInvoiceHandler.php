@@ -34,7 +34,7 @@ class SapServiceHandler {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             // Aumentiamo leggermente il timeout a 6 secondi per dare respiro al Cold Start
-            curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
             $curlData = $this->executeCurl($ch);
             $info = $curlData['info'];
             curl_close($ch);
@@ -145,7 +145,7 @@ class SapServiceHandler {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $xml_data);
@@ -203,8 +203,151 @@ class SapServiceHandler {
         $ping = $stats['total_time_ms'];
         if (!$stats['is_alive']) { $ping = 9999; }
         
-        // Logga sempre ed a prescindere la telemetria in formato JSON per il Grafico (Separato dal DB)
+        // Logga sempre la telemetria JSON per il grafico
         $this->logTelemetry($stats);
+        
+        // --- PERSISTENZA: Leggo il contatore cicli GIALLO consecutivi da state.json ---
+        $stateFile = PROJECT_ROOT_PATH . 'guardian/data/state.json';
+        $stateData = ['last_time' => 0, 'last_state' => 'GREEN', 'consecutive_giallo' => 0];
+        if (file_exists($stateFile)) {
+            $json = file_get_contents($stateFile);
+            if ($json) $stateData = array_merge($stateData, json_decode($json, true));
+        }
+        $consecutiveGiallo = intval($stateData['consecutive_giallo'] ?? 0);
+        
+        $final_label = "";
+        $ps_info = "Check non eseguito";
+        
+        switch (true) {
+
+            // ---------------------------------------------------------------
+            // LIVELLO 3: ROSSO DIRETTO — ping > 2000ms (emergenza catastrofica)
+            // ---------------------------------------------------------------
+            case ($ping > 2000):
+                echo "2. AZIONE: Stato CRITICO (ROSSO). Avvio Manovra Rossa...<br>";
+                $stateData['consecutive_giallo'] = 0;
+                file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                
+                if ($this->checkAntiSpam('ROSSO')) {
+                    $msg = "SAP MONITOR - STATO: CRITICO - Ping: {$ping} ms. Avvio manovra di ripristino SAP-IIS.";
+                    $res_wa = $this->sendWhatsAppAlert($msg);
+                    echo "   INFO: Notifica WhatsApp ROSSA: " . strip_tags($res_wa) . "<br>";
+                }
+
+                $id_log = $this->iniziaLog('ROSSO', $stats, 'Recupero di Emergenza SAP/SQL');
+                $res_job = $this->runSqlReset();
+                $this->runIisReset();
+                
+                if (strpos($res_job, 'ERRORE') !== false) {
+                    $this->chiudiLog($id_log, $ping, false, "Timeout SQL", "FALLITO");
+                    return false;
+                }
+                
+                $this->aggiornaStatoJob($id_log, true);
+                echo "   Reset inviato. Pausa di 3 minuti...<br>";
+                sleep(180);
+                
+                $post_stats = $this->getCombinedSystemHealth();
+                $ps_info = $this->getSystemUptimeCheck();
+                $ms_post = $post_stats['total_time_ms'];
+                $is_success = ($post_stats['is_alive'] === true && $ms_post < 2000);
+                
+                if ($is_success) {
+                    $final_label = ($ms_post < 200) ? "VERDE" : "RIPRISTINATO";
+                    if ($this->checkAntiSpam('VERDE')) {
+                        $msg = "SAP MONITOR - STATO: OPERATIVO. Sistema ripristinato (Ping: {$ms_post} ms).";
+                        $res_wa = $this->sendWhatsAppAlert($msg);
+                        echo "   INFO: Notifica WhatsApp GREEN: " . strip_tags($res_wa) . "<br>";
+                    }
+                } else {
+                    $final_label = "FALLITO";
+                }
+                
+                $this->chiudiLog($id_log, $ms_post, $is_success, $ps_info, $final_label);
+                return $is_success;
+                
+            // ---------------------------------------------------------------
+            // LIVELLO 1 + 2: GIALLO — ping tra 200ms e 2000ms
+            // ---------------------------------------------------------------
+            case ($ping >= 200 && $ping <= 2000):
+                $consecutiveGiallo++;
+                $stateData['consecutive_giallo'] = $consecutiveGiallo;
+                file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                
+                // --- LIVELLO 2: ESCALATION dopo 3 cicli GIALLO consecutivi (~90 min) ---
+                if ($consecutiveGiallo >= 3) {
+                    echo "2. AZIONE: ESCALATION! {$consecutiveGiallo} cicli GIALLO senza miglioramento. Forzo MANOVRA ROSSA...<br>";
+                    
+                    if ($this->checkAntiSpam('ROSSO')) {
+                        $msg = "SAP MONITOR - CRITICO: ESCALATION dopo {$consecutiveGiallo} cicli di lentezza (Ping: {$ping} ms). Avvio reset totale SAP+IIS.";
+                        $res_wa = $this->sendWhatsAppAlert($msg);
+                        echo "   INFO: Notifica WhatsApp ESCALATION: " . strip_tags($res_wa) . "<br>";
+                    }
+                    
+                    $id_log = $this->iniziaLog('ROSSO', $stats, "Escalation Automatica ({$consecutiveGiallo} cicli GIALLO)");
+                    $this->runSqlReset();
+                    $this->runIisReset();
+                    $this->aggiornaStatoJob($id_log, true);
+                    
+                    echo "   Reset escalation inviato. Pausa di 3 minuti...<br>";
+                    sleep(180);
+                    
+                    $post_stats = $this->getCombinedSystemHealth();
+                    $ps_info = $this->getSystemUptimeCheck();
+                    $ms_post = $post_stats['total_time_ms'];
+                    $is_success = ($post_stats['is_alive'] === true && $ms_post < 2000);
+                    
+                    // Reset contatore dopo escalation (sia successo che fallimento)
+                    $stateData['consecutive_giallo'] = 0;
+                    file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                    
+                    if ($is_success) {
+                        $final_label = "RIPRISTINATO_ESCALATION";
+                        if ($this->checkAntiSpam('VERDE')) {
+                            $msg = "SAP MONITOR - RIPRISTINATO via Escalation automatica (Ping: {$ms_post} ms).";
+                            $res_wa = $this->sendWhatsAppAlert($msg);
+                            echo "   INFO: Notifica WhatsApp RIPRISTINO: " . strip_tags($res_wa) . "<br>";
+                        }
+                    } else {
+                        $final_label = "ESCALATION_FALLITA";
+                    }
+                    
+                    $this->chiudiLog($id_log, $ms_post, $is_success, $ps_info, $final_label);
+                    return $is_success;
+                }
+                
+                // --- LIVELLO 1: GIALLO NORMALE — Pulizia DB (primo tentativo) ---
+                echo "2. AZIONE: Latenza rilevata (GIALLO - Ciclo {$consecutiveGiallo}/3). Eseguo Pulizia...<br>";
+                
+                if ($this->checkAntiSpam('GIALLO')) {
+                    $msg = "SAP MONITOR - STATO: LENTEZZA - Ping: {$ping} ms. Eseguita pulizia sessioni DB MSSQL.";
+                    $res_wa = $this->sendWhatsAppAlert($msg);
+                    echo "   INFO: Notifica WhatsApp GIALLA: " . strip_tags($res_wa) . "<br>";
+                }
+
+                $id_log = $this->iniziaLog('GIALLO', $stats, 'Pulizia Connessioni Database');
+                $res_cleanup = $this->runSqlCleanup();
+                $this->aggiornaStatoJob($id_log, (strpos($res_cleanup, 'ERRORE') === false));
+                
+                $post_stats = $this->getCombinedSystemHealth();
+                $ps_info = $this->getSystemUptimeCheck();
+                $final_label = $post_stats['stato'];
+                
+                $this->chiudiLog($id_log, $post_stats['total_time_ms'], true, $ps_info, $final_label);
+                return true;
+                
+            // ---------------------------------------------------------------
+            // VERDE — Sistema operativo, reset contatore
+            // ---------------------------------------------------------------
+            default:
+                echo "2. INFO: Sistema operativo.<br>";
+                $stateData['consecutive_giallo'] = 0;
+                file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
+                $this->checkAntiSpam('VERDE');
+                return true;
+        }
+    }
+
         
         $final_label = "";
         $ps_info = "Check non eseguito";
