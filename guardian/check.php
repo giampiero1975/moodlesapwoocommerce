@@ -12,5 +12,12 @@ require_once PROJECT_ROOT_PATH . 'Model/SapDiagnosticHandler.php';
 
 $sapHandler = new SapDiagnosticHandler();
 $stats = $sapHandler->getCombinedSystemHealth();
-// La logica di exit viene gestita esplicitamente nel file chiamante per massima chiarezza.
+
+if (!$sapHandler->gestisciStatoServer($stats)) {
+    // Interruzione ad alto livello. Impediamo sprechi di RAM o connessioni al DB.
+    // L'orchestratore ha già sparato i log e gli avvisi WhatsApp all'interno di gestisciStatoServer()
+    exit("🛑 GUARDIANO: Sistema B1Sync in stato critico. Pipeline fatture interrotta per sicurezza.\n");
+}
+
+// Altrimenti procediamo silenziosamente
 ?>

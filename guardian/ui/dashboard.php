@@ -352,7 +352,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
     <header>
         <h1>💎 SAP Monitor Dashboard</h1>
         <div class="toggle-container">
-            <span>Auto Refresh (60s)</span>
+            <span>Auto Refresh (5m)</span>
             <label class="switch">
                 <input type="checkbox" id="autoRefreshToggle">
                 <span class="slider"></span>
@@ -418,7 +418,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                     </span>
                 </div>
                 <div class="card-tip" style="background:#9b59b61a; color:#8e44ad; border:1px solid #9b59b6;">
-                    💡 LIVELLO 1: &gt;200ms → GIALLO (cleanup DB). LIVELLO 2: 3 cicli GIALLO → ESCALATION reset SAP+IIS. LIVELLO 3: &gt;2000ms → ROSSO diretto.
+                    💡 <br>LIVELLO 1: &gt;200ms → GIALLO (cleanup DB). <br>LIVELLO 2: 3 cicli GIALLO → ESCALATION reset SAP+IIS. <br>LIVELLO 3: &gt;2000ms → ROSSO diretto.
                 </div>
             </div>
 
@@ -535,11 +535,19 @@ $data = $sapHandler->getFullDiagnostics($filters);
     </div>
 
     <!-- Grafico Latenza -->
-    <div class="card" style="margin-bottom: 30px;">
+    <div class="card" style="margin-bottom: 20px;">
         <div class="card-header">
-            <span class="card-title">📉 Telemetria Real-Time (Ultimi 2 giorni - Cron-Check)</span>
+            <span class="card-title">📉 Telemetria Real-Time (Panoramica Soglia Alert)</span>
         </div>
-        <canvas id="latencyChart" height="100"></canvas>
+        <canvas id="latencyChart" height="80"></canvas>
+    </div>
+
+    <!-- Grafico Dettaglio -->
+    <div class="card" style="margin-bottom: 30px; border-top: 5px solid #3498db !important;">
+        <div class="card-header">
+            <span class="card-title">🔍 Dettaglio Variazioni (Auto-Scale)</span>
+        </div>
+        <canvas id="detailChart" height="80"></canvas>
     </div>
 
     <!-- Azioni Rapide -->
@@ -636,7 +644,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
     function startRefresh() {
         refreshInterval = setInterval(() => {
             window.location.reload();
-        }, 60000); // 60 secondi
+        }, 300000); // 300 secondi (5 minuti)
     }
 
     function stopRefresh() {
@@ -699,9 +707,85 @@ $data = $sapHandler->getFullDiagnostics($filters);
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: true } },
+            plugins: { 
+                legend: { display: true },
+                tooltip: { mode: 'index', intersect: false }
+            },
             scales: {
-                y: { beginAtZero: true, title: { display: true, text: 'ms' } },
+                y: { 
+                    beginAtZero: true, 
+                    title: { display: true, text: 'ms' },
+                    suggestedMax: 250 // Forza la visibilità della soglia anche se i valori sono bassi
+                },
+                x: { grid: { display: false } }
+            }
+        },
+        plugins: [{
+            id: 'thresholdLine',
+            afterDraw: chart => {
+                const ctx = chart.ctx;
+                const yAxis = chart.scales.y;
+                const xAxis = chart.scales.x;
+                const yValue = yAxis.getPixelForValue(200); // Soglia GIALLO a 200ms
+
+                if (yValue >= yAxis.top && yValue <= yAxis.bottom) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 6]);
+                    ctx.moveTo(xAxis.left, yValue);
+                    ctx.lineTo(xAxis.right, yValue);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)'; // Rosso Alert
+                    ctx.stroke();
+                    
+                    // Etichetta Soglia
+                    ctx.fillStyle = 'rgba(231, 76, 60, 1)';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.fillText('SOGLIA ATTENZIONE (200ms)', xAxis.left + 5, yValue - 5);
+                    ctx.restore();
+                }
+            }
+        }]
+    });
+
+    // Rendering Grafico Dettaglio (Auto-Scale)
+    const ctxDetail = document.getElementById('detailChart').getContext('2d');
+    new Chart(ctxDetail, {
+        type: 'line',
+        data: {
+            labels: chartData.map(l => l.date),
+            datasets: [
+                {
+                    label: 'IIS Web (ms)',
+                    data: chartData.map(l => l.web),
+                    borderColor: '#3498db',
+                    tension: 0.4,
+                    pointRadius: 2
+                },
+                {
+                    label: 'Database SQL (ms)',
+                    data: chartData.map(l => l.db),
+                    borderColor: '#f1c40f',
+                    tension: 0.4,
+                    pointRadius: 2
+                },
+                {
+                    label: 'SAP SOAP (ms)',
+                    data: chartData.map(l => l.soap),
+                    borderColor: '#9b59b6',
+                    tension: 0.4,
+                    pointRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { 
+                legend: { display: true },
+                tooltip: { mode: 'index', intersect: false }
+            },
+            scales: {
+                y: { beginAtZero: false, title: { display: true, text: 'ms' } },
                 x: { grid: { display: false } }
             }
         }

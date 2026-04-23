@@ -1,4 +1,5 @@
 <?php
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -9,15 +10,14 @@ if (!defined('PROJECT_ROOT_PATH')) {
 
 require_once 'guardian/check.php';
 
-// Chiama SEMPRE gestisciStatoServer: aggiorna telemetry.json, state.json e gestisce anomalie
-$procedi = $sapHandler->gestisciStatoServer($stats);
-
-// Se il sistema non è VERDE (o gestisciStatoServer ha segnalato blocco), interrompiamo il batch
-if ($stats['stato'] !== 'VERDE' || !$procedi) {
-    exit("🛑 GUARDIANO: Sistema non pronto (Stato: {$stats['stato']}). Recovery avviata, attivo stop di sicurezza.\n");
+// Se il sistema non è VERDE, il batch viene interrotto (il blocco è gestito in guardian/check.php)
+// Ma per sicurezza extra se check.php non avesse fatto exit, lo facciamo qui:
+if ($stats['stato'] !== 'VERDE') {
+    exit("🛑 GUARDIANO: Sistema in stato {$stats['stato']}. Batch interrotto.\n");
 }
 
 // --- START BATCH ---
+
 try {
 	// 1. GENERAZIONE BATCH ID
     $batchID = "PRENOTATO_" . date("Ymd_His");
