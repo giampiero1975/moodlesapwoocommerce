@@ -11,7 +11,7 @@ Il modulo adotta un'architettura **isolata ma integrata**. Risiede interamente n
 - `/guardian/check.php`: Intercettore (Firewall) di ingresso.
 - `/guardian/data/`: Layer di persistenza JSON (Telemetria e Stati).
 - `/guardian/ui/dashboard.php`: Dashboard di monitoraggio visuale.
-- `/guardian/tests/simulator.php`: Ambiente di simulazione per validazione logiche.
+- `/guardian/tests/logic_verification.php`: Suite di test per la validazione delle logiche di escalation.
 
 ---
 
@@ -29,56 +29,59 @@ Il sistema valuta lo stato di salute analizzando tre sensori critici in parallel
 
 ---
 
-## 3. Logica di Intervento (Self-Healing)
-Quando il sistema esce dallo stato VERDE, l'orchestratore (`SapInvoiceHandler`) esegue azioni correttive automatiche:
+## 3. Logica di Intervento ed Escalation (Self-Healing)
+Quando il sistema esce dallo stato VERDE, l'orchestratore (`SapServiceHandler`) esegue azioni correttive automatiche basate su una logica a 3 livelli:
 
-| Stato | Azione Tecnica | Notifica WhatsApp | Effetto sulla Pipeline |
-| :--- | :--- | :--- | :--- |
-| **GIALLO** | `runSqlCleanup()`: Kill dei processi SQL pendenti (>4 ore). | Alert "Lentezza" | **EXIT** (Batch posticipato) |
-| **ROSSO** | `runSqlReset()`: Avvio SQL Job di ripristino IIS/SAP. | Alert "Critico" | **EXIT** (Batch posticipato) |
+| Livello | Condizione | Azione Tecnica | Notifica WhatsApp | Effetto sulla Pipeline |
+| :--- | :--- | :--- | :--- | :--- |
+| **1** | **GIALLO** (1° e 2° check) | `runSqlCleanup()`: Kill dei processi SQL pendenti (>4 ore). | Alert "Lentezza" (1 ogni 60m) | **EXIT** (Batch interrotto) |
+| **2** | **ESCALATION** (3° GIALLO cons.) | `runSqlReset()`: Reset totale servizi SAP/IIS dopo persistenza errore. | Alert "Escalation Critica" | **EXIT** (Batch interrotto) |
+| **3** | **ROSSO** (Ping > 2000ms) | `runSqlReset()`: Avvio immediato manovra di ripristino IIS/SAP. | Alert "Stato Critico" | **EXIT** (Batch interrotto) |
 
 ### Il "Firewall" in `setInvoiceCurl.php`
-L'integrazione nel cronjob di fatturazione è brutale e sicura:
+L'integrazione nel cronjob di fatturazione garantisce l'integrità dei dati:
 ```php
-require_once 'guardian/check.php';
+require_once 'guardian/check.php'; // Esegue il monitoraggio e le riparazioni
 if ($stats['stato'] !== 'VERDE') {
-    $sapHandler->gestisciStatoServer($stats);
-    exit("Stop di sicurezza");
+    exit("🛑 GUARDIANO: Sistema instabile. Batch interrotto.\n");
 }
 ```
-Se il sistema non è perfetto, il Guardiano agisce e **interrompe immediatamente** l'esecuzione per evitare timeout infiniti o corruzione dati.
+Se il sistema non è nello stato ottimale, il Guardiano agisce e **interrompe immediatamente** l'esecuzione per evitare timeout infiniti o corruzione dati.
 
 ---
 
-## 4. Gestione Dati e Persistenza
-Per massimizzare le performance, il monitoraggio utilizza file JSON invece di sovraccaricare il database per le letture frequenti.
+## 4. Gestione Dati e Persistenza Atomica
+Per massimizzare le performance e l'affidabilità, il monitoraggio utilizza file JSON gestiti in modalità atomica.
 
-### Telemetria (Buffer Circolare O(1))
-Il file `telemetry.json` mantiene solo gli ultimi **96 record** (circa 48 ore di dati se il cron gira ogni 30 min). 
-- **Auto-Cleaning**: Ad ogni scrittura, il sistema esegue un `array_slice`, garantendo che il file non cresca mai oltre pochi KB.
-- **Dashboard**: Chart.js legge questo file per disegnare il grafico in tempo reale.
+### Telemetria (Storico Analitico 7 Giorni)
+Il file `telemetry.json` mantiene lo storico completo degli ultimi **7 giorni**. 
+- **Log Continuo**: Ogni esecuzione del cron viene registrata per garantire una visibilità granulare.
+- **Auto-Cleaning**: Ad ogni scrittura, il sistema rimuove automaticamente i record più vecchi di una settimana basandosi sul timestamp.
+- **Performance**: Chart.js legge questo file per visualizzare l'andamento analitico senza campionamenti.
 
-### Anti-Spam (WhatsApp Cooldown)
-Il file `state.json` memorizza l'ultimo allarme inviato.
-- **Cooldown**: Il sistema non invia più di un alert ogni **60 minuti** per lo stesso stato, evitando il flooding di messaggi sul telefono del sistemista.
+### Anti-Spam e Stato (Persistenza Condivisa)
+Il file `state.json` gestisce la memoria a breve termine del sistema.
+- **Gestione Atomica**: Lo stato è caricato in un buffer di classe unico per evitare conflitti tra contatori e allarmi.
+- **WhatsApp Cooldown**: Il sistema non invia più di un alert ogni **60 minuti** per lo stesso stato di degrado.
+- **Normalizzazione**: Gli stati sono standardizzati in `VERDE`, `GIALLO`, `ROSSO`.
 
 ---
 
-## 5. Strumenti Operativi
+## 5. Strumenti Operativi e Diagnostica
 
 ### Dashboard (`/guardian/ui/dashboard.php`)
-Visualizza:
-- Stato attuale dei sensori (IIS, DB, SAP).
-- Grafico storico delle latenze.
-- Storico degli interventi (estratto dal DB MySQL `log_ws_sap`).
-- Statistiche di Uptime dei processi Windows.
+Visualizza in tempo reale:
+- Stato "semaforico" dei sensori (IIS, DB, SAP).
+- Grafici storici (Real-time e Dettaglio Auto-Scale).
+- Storico degli interventi reali (Tabella `log_ws_sap`).
+- Uptime dei processi Windows (SAP B1 e IIS).
 
-### Simulatore (`/guardian/tests/simulator.php`)
-Permette di testare le manovre di emergenza e l'invio degli alert WhatsApp senza mandare realmente in crash il server. Utilizza una classe *Mock* che eredita dal Guardiano reale.
+### Suite di Test (`/guardian/tests/logic_verification.php`)
+Ambiente di simulazione per validare la logica di escalation a 3 livelli e il cooldown degli allarmi senza influenzare i servizi reali.
 
 ---
 
 ## 6. Manutenzione e Troubleshooting
 - **Log Database**: Gli interventi reali sono sempre scritti nella tabella MySQL `log_ws_sap`.
-- **Fuso Orario**: Impostato su `Europe/Rome` per garantire la coerenza tra orario del server e orario italiano.
-- **Permessi**: La cartella `/guardian/data/` deve avere permessi di scrittura per l'utente web (IIS/Apache).
+- **Fuso Orario**: Impostato su `Europe/Rome` per coerenza assoluta con i log di sistema.
+- **Permessi**: La cartella `/guardian/data/` deve essere scrivibile dall'utente IIS.
