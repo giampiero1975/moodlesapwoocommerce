@@ -169,6 +169,6 @@ echo "corso: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['corso'];
 echo "login: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['login'];
 echo "pass: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['pass'];
 */
-    // WHATSAPP NOTIFICATIONS (CallMeBot)
-    define('WHATSAPP_PHONE', '393476806154'); // Numero senza + per conformità API CallMeBot
-    define('WHATSAPP_API_KEY', '4185403');       // Inserire API Key di CallMeBot
+    // TELEGRAM NOTIFICATIONS
+    define('TELEGRAM_BOT_TOKEN', '8731672846:AAFQey2ZfyjOXXAmiQrcW9zUL_hRC1m1tAk');
+    define('TELEGRAM_CHAT_ID', '44238515');

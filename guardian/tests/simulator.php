@@ -16,8 +16,8 @@ class MockSapDiagnosticHandler extends SapDiagnosticHandler {
         return "COMPLETATO";
     }
     
-    public function sendWhatsAppAlert($message) {
-        echo "<div style='color:green; font-weight:bold;'>[MOCK-WHATSAPP] Intercettato: $message</div>";
+    public function sendTelegramAlert($message) {
+        echo "<div style='color:green; font-weight:bold;'>[MOCK-TELEGRAM] Intercettato: $message</div>";
         return "Test Inviato";
     }
     
@@ -49,11 +49,11 @@ class MockSapDiagnosticHandler extends SapDiagnosticHandler {
         $final_label = "";
         
         switch (true) {
-            case ($ping > 2000):
+            case ($ping > 3000):
                 echo "🛑 AZIONE: TIMEOUT CRITICO RILEVATO ({$ping}ms). Eseguo Recupero di Emergenza...<br>";
                 if ($this->checkAntiSpam('ROSSO')) {
                     $msg = "SAP MONITOR - STATO: CRITICO - Ping: {$ping} ms. Avvio manovra di ripristino SAP-IIS.";
-                    $res_wa = $this->sendWhatsAppAlert($msg);
+                    $res_tg = $this->sendTelegramAlert($msg);
                 }
                 $id_log = $this->iniziaLog('ROSSO', $stats, 'Recupero di Emergenza SAP/SQL');
                 $res_job = $this->runSqlReset();
@@ -66,16 +66,16 @@ class MockSapDiagnosticHandler extends SapDiagnosticHandler {
                 
                 if ($this->checkAntiSpam('VERDE')) {
                     $msg = "SAP MONITOR - STATO: OPERATIVO. Sistema ripristinato (Ping: {$ms_post} ms).";
-                    $res_wa = $this->sendWhatsAppAlert($msg);
+                    $res_tg = $this->sendTelegramAlert($msg);
                 }
                 $this->chiudiLog($id_log, $ms_post, $is_success, 'Mock ps check', $final_label);
                 return $is_success;
                 
-            case ($ping >= 200 && $ping <= 2000):
+            case ($ping >= 800 && $ping <= 3000):
                 echo "⚠️ AZIONE: Latenza rilevata ({$ping}ms - GIALLO). Eseguo Pulizia Database...<br>";
                 if ($this->checkAntiSpam('GIALLO')) {
                     $msg = "SAP MONITOR - STATO: LENTEZZA - Ping: {$ping} ms. Eseguita pulizia sessioni DB MSSQL.";
-                    $res_wa = $this->sendWhatsAppAlert($msg);
+                    $res_tg = $this->sendTelegramAlert($msg);
                 }
                 $id_log = $this->iniziaLog('GIALLO', $stats, 'Pulizia Connessioni Database');
                 $res_cleanup = $this->runSqlCleanup();
@@ -100,11 +100,11 @@ $cases = [
         'stats' => [ 'is_alive' => true, 'total_time_ms' => 50.5, 'stato' => 'VERDE', 'web' => ['total_time_ms' => 15.2], 'db' => ['total_time_ms' => 40.1, 'deep_test' => true], 'soap' => ['total_time_ms' => 50.5] ]
     ],
     [
-        'title' => 'CASO 2: LENTEZZA DATABASE O SOAP (Giallo: Latenza tra 200ms e 2000ms)',
-        'stats' => [ 'is_alive' => true, 'total_time_ms' => 450.0, 'stato' => 'GIALLO', 'web' => ['total_time_ms' => 15.2], 'db' => ['total_time_ms' => 450.0, 'deep_test' => true],  'soap' => ['total_time_ms' => 50.5] ]
+        'title' => 'CASO 2: LENTEZZA DATABASE O SOAP (Giallo: Latenza tra 800ms e 3000ms)',
+        'stats' => [ 'is_alive' => true, 'total_time_ms' => 950.0, 'stato' => 'GIALLO', 'web' => ['total_time_ms' => 15.2], 'db' => ['total_time_ms' => 950.0, 'deep_test' => true],  'soap' => ['total_time_ms' => 50.5] ]
     ],
     [
-        'title' => 'CASO 3: PARALISI DI UN SERVIZIO (Rosso: Latenza > 2000ms)',
+        'title' => 'CASO 3: PARALISI DI UN SERVIZIO (Rosso: Latenza > 3000ms)',
         'stats' => [ 'is_alive' => true, 'total_time_ms' => 3500.0, 'stato' => 'ROSSO', 'web' => ['total_time_ms' => 15.2], 'db' => ['total_time_ms' => 40.1, 'deep_test' => true], 'soap' => ['total_time_ms' => 3500.0] ]
     ],
     [
