@@ -352,7 +352,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
     <header>
         <h1>💎 SAP Monitor Dashboard</h1>
         <div class="toggle-container">
-            <span>Auto Refresh (5m)</span>
+            <span>Auto Refresh (15m)</span>
             <label class="switch">
                 <input type="checkbox" id="autoRefreshToggle">
                 <span class="slider"></span>
@@ -375,7 +375,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
             🛡️ SETTORE "AZIONE" (Orchestratore)
         </h2>
         <p style="font-size: 13px; color: #7f8c8d; margin-bottom: 15px;">
-            Questi sono gli unici valori reali utilizzati dal Guardiano per stabilire se fermare il batch e lanciare l'allarme WhatsApp.
+            Questi sono gli unici valori reali utilizzati dal Guardiano per stabilire se fermare il batch e lanciare l'allarme Telegram.
         </p>
 
         <div class="grid">
@@ -388,8 +388,8 @@ $data = $sapHandler->getFullDiagnostics($filters);
                         if (isset($data['soap'])) {
                             $soap_ms = $data['soap']['total_time_ms'];
                             if (!$data['soap']['is_alive']) { $s_stato = 'OFFLINE'; $s_lbl = 'badge-offline'; }
-                            elseif ($soap_ms > 2000) { $s_stato = 'ROSSO'; $s_lbl = 'badge-rosso'; }
-                            elseif ($soap_ms > 200) { $s_stato = 'GIALLO'; $s_lbl = 'badge-giallo'; }
+                            elseif ($soap_ms > 3000) { $s_stato = 'ROSSO'; $s_lbl = 'badge-rosso'; }
+                            elseif ($soap_ms > 800) { $s_stato = 'GIALLO'; $s_lbl = 'badge-giallo'; }
                             else { $s_stato = 'VERDE'; $s_lbl = 'badge-verde'; }
                         }
                         // Leggo il contatore escalation da state.json
@@ -412,13 +412,13 @@ $data = $sapHandler->getFullDiagnostics($filters);
                 </div>
                 <div class="stat-row">
                     <span class="stat-label">Cicli GIALLO consecutivi:</span>
-                    <span class="stat-value" style="color: <?= $consGiallo >= 2 ? '#e74c3c' : ($consGiallo == 1 ? '#f39c12' : '#27ae60') ?>">
-                        <?= $consGiallo ?> / 3
-                        <?= $consGiallo >= 3 ? '🚨 ESCALATION IN CORSO' : ($consGiallo > 0 ? '⚠️' : '✅') ?>
+                    <span class="stat-value" style="color: <?= $consGiallo >= 4 ? '#e74c3c' : ($consGiallo >= 1 ? '#f39c12' : '#27ae60') ?>">
+                        <?= $consGiallo ?> / 5
+                        <?= $consGiallo >= 5 ? '🚨 ESCALATION IN CORSO' : ($consGiallo > 0 ? '⚠️' : '✅') ?>
                     </span>
                 </div>
                 <div class="card-tip" style="background:#9b59b61a; color:#8e44ad; border:1px solid #9b59b6;">
-                    💡 <br>LIVELLO 1: &gt;200ms → GIALLO (cleanup DB). <br>LIVELLO 2: 3 cicli GIALLO → ESCALATION reset SAP+IIS. <br>LIVELLO 3: &gt;2000ms → ROSSO diretto.
+                    💡 <br>LIVELLO 1: &gt;800ms → GIALLO (cleanup DB). <br>LIVELLO 2: 5 cicli GIALLO → ESCALATION reset SAP+IIS. <br>LIVELLO 3: &gt;3000ms → ROSSO diretto.
                 </div>
             </div>
 
@@ -443,7 +443,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                     <span class="stat-label">Tempo Query Test:</span>
                     <span class="stat-value"><?= $data['db']['query_time_ms'] ?> ms</span>
                 </div>
-                <div class="card-tip tip-yellow">💡 Blocco intermedio: &gt;200ms → GIALLO (pulizia query pendenti). Se "Query Test" va in timeout (2500ms) → ROSSO diretto.</div>
+                <div class="card-tip tip-yellow">💡 Blocco intermedio: &gt;800ms → GIALLO (pulizia query pendenti). Se "Query Test" va in timeout (3500ms) → ROSSO diretto.</div>
             </div>
         </div>
     </div>
@@ -644,7 +644,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
     function startRefresh() {
         refreshInterval = setInterval(() => {
             window.location.reload();
-        }, 300000); // 300 secondi (5 minuti)
+        }, 900000); // 900 secondi (15 minuti)
     }
 
     function stopRefresh() {
@@ -715,7 +715,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                 y: { 
                     beginAtZero: true, 
                     title: { display: true, text: 'ms' },
-                    suggestedMax: 250 // Forza la visibilità della soglia anche se i valori sono bassi
+                    suggestedMax: 1000 // Forza la visibilità della soglia anche se i valori sono bassi
                 },
                 x: { grid: { display: false } }
             }
@@ -726,7 +726,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                 const ctx = chart.ctx;
                 const yAxis = chart.scales.y;
                 const xAxis = chart.scales.x;
-                const yValue = yAxis.getPixelForValue(200); // Soglia GIALLO a 200ms
+                const yValue = yAxis.getPixelForValue(800); // Soglia GIALLO a 800ms
 
                 if (yValue >= yAxis.top && yValue <= yAxis.bottom) {
                     ctx.save();
@@ -741,7 +741,7 @@ $data = $sapHandler->getFullDiagnostics($filters);
                     // Etichetta Soglia
                     ctx.fillStyle = 'rgba(231, 76, 60, 1)';
                     ctx.font = 'bold 11px sans-serif';
-                    ctx.fillText('SOGLIA ATTENZIONE (200ms)', xAxis.left + 5, yValue - 5);
+                    ctx.fillText('SOGLIA ATTENZIONE (800ms)', xAxis.left + 5, yValue - 5);
                     ctx.restore();
                 }
             }

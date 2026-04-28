@@ -43,13 +43,13 @@ class SapServiceHandler {
             $ms = round($info['total_time'] * 1000, 2);
             $isAlive = ($info['http_code'] > 0);
             
-            // Se il ping è "Accettabile" (VERDE o GIALLO, quindi sotto i 2000ms),
+            // Se il ping è "Accettabile" (VERDE o GIALLO, quindi sotto i 3000ms),
             // fermiamo subito il ciclo. Il server è sveglio!
-            if ($isAlive && $ms < 200) {
+            if ($isAlive && $ms < 800) {
                 break;
             }
             
-            // Se siamo qui, il ping è fallito o è lentissimo (> 2000ms).
+            // Se siamo qui, il ping è fallito o è lentissimo (> 3000ms).
             // Se non è l'ultimo tentativo, aspettiamo 2 secondi e riproviamo.
             if ($attempt < $maxRetries) {
                 sleep(2);
@@ -58,8 +58,8 @@ class SapServiceHandler {
         
         // Calcoliamo lo stato finale in base all'esito dell'ultimo tentativo valido
         if (!$isAlive) { $stato = "⚫ OFFLINE"; }
-        elseif ($ms < 200) { $stato = "🟢 VERDE"; }
-        elseif ($ms <= 2000) { $stato = "🟡 GIALLO"; } // Allineato alla logica dell'orchestratore
+        elseif ($ms < 800) { $stato = "🟢 VERDE"; }
+        elseif ($ms <= 3000) { $stato = "🟡 GIALLO"; } // Allineato alla logica dell'orchestratore
         else { $stato = "🔴 ROSSO"; }
         
         return [
@@ -108,7 +108,7 @@ class SapServiceHandler {
         }
         $total_time = round((microtime(true) - $start) * 1000, 2);
         
-        $stato = ($total_time < 500) ? "VERDE" : (($total_time <= 2000) ? "GIALLO" : "ROSSO");
+        $stato = ($total_time < 800) ? "VERDE" : (($total_time <= 3000) ? "GIALLO" : "ROSSO");
         if (!$is_alive) $stato = "OFFLINE";
         if ($is_alive && !$deep_test) $stato = "GIALLO"; // Connesso ma query profonda fallita
 
@@ -173,8 +173,8 @@ class SapServiceHandler {
         $worst_ping = max($web['total_time_ms'], $db['total_time_ms'], $soap['total_time_ms']);
         $is_alive = $web['is_alive'] && $db['is_alive'] && $soap['is_alive'];
         
-        if ($db['is_alive'] && !$db['deep_test'] && $worst_ping < 2000) {
-            $worst_ping = 2500; // Forziamo rosso se DB è timeoutato/bloccato pesantemente su query
+        if ($db['is_alive'] && !$db['deep_test'] && $worst_ping < 3000) {
+            $worst_ping = 3500; // Forziamo rosso se DB è timeoutato/bloccato pesantemente su query
         }
 
         if (!$is_alive) {
@@ -184,7 +184,7 @@ class SapServiceHandler {
         return [
             'is_alive' => $is_alive,
             'total_time_ms' => $worst_ping,
-            'stato' => ($worst_ping > 2000) ? "ROSSO" : (($worst_ping > 200) ? "GIALLO" : "VERDE"),
+            'stato' => ($worst_ping > 3000) ? "ROSSO" : (($worst_ping > 800) ? "GIALLO" : "VERDE"),
             'web' => $web,
             'db' => $db,
             'soap' => $soap
@@ -219,17 +219,17 @@ class SapServiceHandler {
         switch (true) {
 
             // ---------------------------------------------------------------
-            // LIVELLO 3: ROSSO DIRETTO — ping > 2000ms (emergenza catastrofica)
+            // LIVELLO 3: ROSSO DIRETTO — ping > 3000ms (emergenza catastrofica)
             // ---------------------------------------------------------------
-            case ($ping > 2000):
+            case ($ping > 3000):
                 echo "2. AZIONE: Stato CRITICO (ROSSO). Avvio Manovra Rossa...<br>";
                 $this->stateData['consecutive_giallo'] = 0;
                 $this->saveState();
                 
                 if ($this->checkAntiSpam('ROSSO')) {
                     $msg = "SAP MONITOR - STATO: CRITICO - Ping: {$ping} ms. Avvio manovra di ripristino SAP-IIS.";
-                    $res_wa = $this->sendWhatsAppAlert($msg);
-                    echo "   INFO: Notifica WhatsApp ROSSA: " . strip_tags($res_wa) . "<br>";
+                    $res_tg = $this->sendTelegramAlert($msg);
+                    echo "   INFO: Notifica Telegram ROSSA: " . strip_tags($res_tg) . "<br>";
                 }
 
                 $id_log = $this->iniziaLog('ROSSO', $stats, 'Recupero di Emergenza SAP/SQL');
@@ -248,14 +248,14 @@ class SapServiceHandler {
                 $post_stats = $this->getCombinedSystemHealth();
                 $ps_info = $this->getSystemUptimeCheck();
                 $ms_post = $post_stats['total_time_ms'];
-                $is_success = ($post_stats['is_alive'] === true && $ms_post < 2000);
+                $is_success = ($post_stats['is_alive'] === true && $ms_post < 3000);
                 
                 if ($is_success) {
-                    $final_label = ($ms_post < 200) ? "VERDE" : "RIPRISTINATO";
+                    $final_label = ($ms_post < 800) ? "VERDE" : "RIPRISTINATO";
                     if ($this->checkAntiSpam('VERDE')) {
                         $msg = "SAP MONITOR - STATO: OPERATIVO. Sistema ripristinato (Ping: {$ms_post} ms).";
-                        $res_wa = $this->sendWhatsAppAlert($msg);
-                        echo "   INFO: Notifica WhatsApp GREEN: " . strip_tags($res_wa) . "<br>";
+                        $res_tg = $this->sendTelegramAlert($msg);
+                        echo "   INFO: Notifica Telegram GREEN: " . strip_tags($res_tg) . "<br>";
                     }
                 } else {
                     $final_label = "FALLITO";
@@ -265,21 +265,21 @@ class SapServiceHandler {
                 return $is_success;
                 
             // ---------------------------------------------------------------
-            // LIVELLO 1 + 2: GIALLO — ping tra 200ms e 2000ms
+            // LIVELLO 1 + 2: GIALLO — ping tra 800ms e 3000ms
             // ---------------------------------------------------------------
-            case ($ping >= 200 && $ping <= 2000):
+            case ($ping >= 800 && $ping <= 3000):
                 $consecutiveGiallo++;
                 $this->stateData['consecutive_giallo'] = $consecutiveGiallo;
                 $this->saveState();
                 
-                // --- LIVELLO 2: ESCALATION dopo 3 cicli GIALLO consecutivi (~90 min) ---
-                if ($consecutiveGiallo >= 3) {
+                // --- LIVELLO 2: ESCALATION dopo 5 cicli GIALLO consecutivi ---
+                if ($consecutiveGiallo >= 5) {
                     echo "2. AZIONE: ESCALATION! {$consecutiveGiallo} cicli GIALLO senza miglioramento. Forzo MANOVRA ROSSA...<br>";
                     
                     if ($this->checkAntiSpam('ROSSO')) {
                         $msg = "SAP MONITOR - CRITICO: ESCALATION dopo {$consecutiveGiallo} cicli di lentezza (Ping: {$ping} ms). Avvio reset totale SAP+IIS.";
-                        $res_wa = $this->sendWhatsAppAlert($msg);
-                        echo "   INFO: Notifica WhatsApp ESCALATION: " . strip_tags($res_wa) . "<br>";
+                        $res_tg = $this->sendTelegramAlert($msg);
+                        echo "   INFO: Notifica Telegram ESCALATION: " . strip_tags($res_tg) . "<br>";
                     }
                     
                     $id_log = $this->iniziaLog('ROSSO', $stats, "Escalation Automatica ({$consecutiveGiallo} cicli GIALLO)");
@@ -293,7 +293,7 @@ class SapServiceHandler {
                     $post_stats = $this->getCombinedSystemHealth();
                     $ps_info = $this->getSystemUptimeCheck();
                     $ms_post = $post_stats['total_time_ms'];
-                    $is_success = ($post_stats['is_alive'] === true && $ms_post < 2000);
+                    $is_success = ($post_stats['is_alive'] === true && $ms_post < 3000);
                     
                     // Reset contatore dopo escalation (sia successo che fallimento)
                     $this->stateData['consecutive_giallo'] = 0;
@@ -303,8 +303,8 @@ class SapServiceHandler {
                         $final_label = "RIPRISTINATO_ESCALATION";
                         if ($this->checkAntiSpam('VERDE')) {
                             $msg = "SAP MONITOR - RIPRISTINATO via Escalation automatica (Ping: {$ms_post} ms).";
-                            $res_wa = $this->sendWhatsAppAlert($msg);
-                            echo "   INFO: Notifica WhatsApp RIPRISTINO: " . strip_tags($res_wa) . "<br>";
+                            $res_tg = $this->sendTelegramAlert($msg);
+                            echo "   INFO: Notifica Telegram RIPRISTINO: " . strip_tags($res_tg) . "<br>";
                         }
                     } else {
                         $final_label = "ESCALATION_FALLITA";
@@ -315,12 +315,12 @@ class SapServiceHandler {
                 }
                 
                 // --- LIVELLO 1: GIALLO NORMALE — Pulizia DB (primo tentativo) ---
-                echo "2. AZIONE: Latenza rilevata (GIALLO - Ciclo {$consecutiveGiallo}/3). Eseguo Pulizia...<br>";
+                echo "2. AZIONE: Latenza rilevata (GIALLO - Ciclo {$consecutiveGiallo}/5). Eseguo Pulizia...<br>";
                 
                 if ($this->checkAntiSpam('GIALLO')) {
                     $msg = "SAP MONITOR - STATO: LENTEZZA - Ping: {$ping} ms. Eseguita pulizia sessioni DB MSSQL.";
-                    $res_wa = $this->sendWhatsAppAlert($msg);
-                    echo "   INFO: Notifica WhatsApp GIALLA: " . strip_tags($res_wa) . "<br>";
+                    $res_tg = $this->sendTelegramAlert($msg);
+                    echo "   INFO: Notifica Telegram GIALLA: " . strip_tags($res_tg) . "<br>";
                 }
 
                 $id_log = $this->iniziaLog('GIALLO', $stats, 'Pulizia Connessioni Database');
@@ -447,51 +447,32 @@ class SapServiceHandler {
         return ['result' => $res, 'info' => $info];
     }
 
-    public function sendWhatsAppAlert($message) {
-        // Rimuoviamo backtick se presenti per il messaggio WhatsApp (CallMeBot potrebbe non gradirli)
-        $message = str_replace('`n', "\n", $message);
-        
-        if (!defined('WHATSAPP_PHONE') || !defined('WHATSAPP_API_KEY') || WHATSAPP_API_KEY === 'XXXXXX') {
-            $this->logger->log("WhatsApp Alert: Credenziali non configurate in config.php");
-            return "Errore: Credenziali non configurate";
+    public function sendTelegramAlert($message) {
+        if (!defined('TELEGRAM_BOT_TOKEN') || !defined('TELEGRAM_CHAT_ID') || TELEGRAM_BOT_TOKEN === 'XXXXXX') {
+            $this->logger->log("Telegram Alert: Credenziali non configurate in config.php");
+            return "Errore: Credenziali Telegram non configurate";
         }
 
         $params = [
-            'phone' => WHATSAPP_PHONE,
-            'text'  => $message,
-            'apikey' => WHATSAPP_API_KEY
+            'chat_id' => TELEGRAM_CHAT_ID,
+            'text'    => $message
         ];
-        $url = "https://api.callmebot.com/whatsapp.php?" . http_build_query($params);
+        $url = "https://api.telegram.org/bot" . TELEGRAM_BOT_TOKEN . "/sendMessage";
         
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 20);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); 
-        // User-Agent e Referer obbligatori per non essere bloccati dal loro Apache con 403
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        curl_setopt($ch, CURLOPT_REFERER, 'https://www.google.com');
-        
-        // Bypass verifica SSL (Necessario su Laragon/Windows se i certificati non sono OK)
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         
         $curlData = $this->executeCurl($ch);
-        $res = $curlData['result'];
-        
-        if ($res === false) {
-            $error = curl_error($ch);
-            if ($this->logger) $this->logger->log("WhatsApp Alert Error: " . $error);
-            curl_close($ch);
-            return "Errore cURL: " . $error;
-        }
-        
-        curl_close($ch);
-        if ($this->logger) $this->logger->log("WhatsApp Alert Response: " . $res);
-        return $res;
+        return $curlData['result'];
     }
 
     /**
-     * Gestisce il cooldown delle notifiche WhatsApp.
+     * Gestisce il cooldown delle notifiche.
      * Utilizza il buffer di classe $this->stateData per garantire atomicità.
      */
     private function checkAntiSpam($newState) {

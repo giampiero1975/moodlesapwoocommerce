@@ -10,7 +10,7 @@ require_once PROJECT_ROOT_PATH . 'Model/SapInvoiceHandler.php';
 
 class SapEscalationTester extends SapServiceHandler {
     public $actions = [];
-    public $whatsapp_logs = [];
+    public $telegram_logs = [];
     
     // Override del costruttore per evitare connessioni reali
     public function __construct() {
@@ -33,8 +33,8 @@ class SapEscalationTester extends SapServiceHandler {
         return "Comando inviato";
     }
 
-    public function sendWhatsAppAlert($message) {
-        $this->whatsapp_logs[] = $message;
+    public function sendTelegramAlert($message) {
+        $this->telegram_logs[] = $message;
         return "MOCK_OK";
     }
 
@@ -84,26 +84,26 @@ class SapEscalationTester extends SapServiceHandler {
         $consecutiveGiallo = intval($stateData['consecutive_giallo'] ?? 0);
         
         switch (true) {
-            case ($ping > 2000):
+            case ($ping > 3000):
                 $this->actions[] = "TRIGGER_ROSSO_DIRETTO";
                 $stateData['consecutive_giallo'] = 0;
                 file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
                 if ($this->checkAntiSpamMock('ROSSO', $stateFile)) {
-                    $this->sendWhatsAppAlert("SAP MONITOR - STATO: CRITICO - Ping: {$ping} ms. Avvio manovra...");
+                    $this->sendTelegramAlert("SAP MONITOR - STATO: CRITICO - Ping: {$ping} ms. Avvio manovra...");
                 }
                 $this->runSqlReset();
                 $this->runIisReset();
                 return true;
 
-            case ($ping >= 200 && $ping <= 2000):
+            case ($ping >= 800 && $ping <= 3000):
                 $consecutiveGiallo++;
                 $stateData['consecutive_giallo'] = $consecutiveGiallo;
                 file_put_contents($stateFile, json_encode($stateData), LOCK_EX);
                 
-                if ($consecutiveGiallo >= 3) {
+                if ($consecutiveGiallo >= 5) {
                     $this->actions[] = "TRIGGER_ESCALATION";
                     if ($this->checkAntiSpamMock('ROSSO', $stateFile)) {
-                        $this->sendWhatsAppAlert("SAP MONITOR - CRITICO: ESCALATION ({$consecutiveGiallo} cicli). Reset totale.");
+                        $this->sendTelegramAlert("SAP MONITOR - CRITICO: ESCALATION ({$consecutiveGiallo} cicli). Reset totale.");
                     }
                     $this->runSqlReset();
                     $this->runIisReset();
@@ -114,7 +114,7 @@ class SapEscalationTester extends SapServiceHandler {
                 
                 $this->actions[] = "TRIGGER_GIALLO_PULIZIA";
                 if ($this->checkAntiSpamMock('GIALLO', $stateFile)) {
-                    $this->sendWhatsAppAlert("SAP MONITOR - STATO: LENTEZZA - Ping: {$ping} ms.");
+                    $this->sendTelegramAlert("SAP MONITOR - STATO: LENTEZZA - Ping: {$ping} ms.");
                 }
                 $this->runSqlCleanup();
                 return true;
@@ -169,32 +169,37 @@ $tester = new SapEscalationTester();
 echo "\n[Test 1] Invio stato VERDE...\n";
 $tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 50, 'stato' => 'VERDE']);
 echo "Azioni: " . implode(", ", $tester->actions) . "\n";
-echo "WhatsApp inviati: " . count($tester->whatsapp_logs) . "\n";
+echo "Telegram inviati: " . count($tester->telegram_logs) . "\n";
 
 // 2. Check GIALLO 1 (Cleanup)
-echo "\n[Test 2] Invio stato GIALLO (1/3)...\n";
-$tester->actions = []; $tester->whatsapp_logs = [];
-$tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 450, 'stato' => 'GIALLO']);
+echo "\n[Test 2] Invio stato GIALLO (1/5)...\n";
+$tester->actions = []; $tester->telegram_logs = [];
+$tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 950, 'stato' => 'GIALLO']);
 echo "Azioni: " . implode(", ", $tester->actions) . "\n";
-echo "WhatsApp inviati: " . count($tester->whatsapp_logs) . " -> " . ($tester->whatsapp_logs[0] ?? '') . "\n";
+echo "Telegram inviati: " . count($tester->telegram_logs) . " -> " . ($tester->telegram_logs[0] ?? '') . "\n";
 
-// 3. Check GIALLO 2 (Cleanup, No WhatsApp causa cooldown 1h)
-echo "\n[Test 3] Invio stato GIALLO (2/3)...\n";
-$tester->actions = []; $tester->whatsapp_logs = [];
-$tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 455, 'stato' => 'GIALLO']);
+// 3. Check GIALLO 2 (Cleanup, No Telegram causa cooldown 1h)
+echo "\n[Test 3] Invio stato GIALLO (2/5)...\n";
+$tester->actions = []; $tester->telegram_logs = [];
+$tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 955, 'stato' => 'GIALLO']);
 echo "Azioni: " . implode(", ", $tester->actions) . "\n";
-echo "WhatsApp inviati: " . count($tester->whatsapp_logs) . " (Corretto: cooldown attivo)\n";
+echo "Telegram inviati: " . count($tester->telegram_logs) . " (Corretto: cooldown attivo)\n";
 
-// 4. Check GIALLO 3 (ESCALATION RESET)
-echo "\n[Test 4] Invio stato GIALLO (3/3 - ESCALATION)...\n";
-$tester->actions = []; $tester->whatsapp_logs = [];
-$tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 460, 'stato' => 'GIALLO']);
+// 4. Check GIALLO 5 (ESCALATION RESET)
+echo "\n[Test 4] Invio stato GIALLO (5/5 - ESCALATION)...\n";
+$tester->actions = []; $tester->telegram_logs = [];
+// Simuliamo l'avanzamento del contatore
+$state = json_decode(file_get_contents(TEST_STATE_FILE), true);
+$state['consecutive_giallo'] = 4;
+file_put_contents(TEST_STATE_FILE, json_encode($state));
+
+$tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 960, 'stato' => 'GIALLO']);
 echo "Azioni: " . implode(", ", $tester->actions) . "\n";
-echo "WhatsApp inviati: " . count($tester->whatsapp_logs) . " -> " . ($tester->whatsapp_logs[0] ?? '') . "\n";
+echo "Telegram inviati: " . count($tester->telegram_logs) . " -> " . ($tester->telegram_logs[0] ?? '') . "\n";
 
 // 5. Verifica reset contatore dopo escalation (Check VERDE)
 echo "\n[Test 5] Verifica reset contatore (Invio VERDE)...\n";
-$tester->actions = []; $tester->whatsapp_logs = [];
+$tester->actions = []; $tester->telegram_logs = [];
 $tester->gestisciStatoServer(['is_alive' => true, 'total_time_ms' => 40, 'stato' => 'VERDE']);
 $state = json_decode(file_get_contents(TEST_STATE_FILE), true);
 echo "Contatore consecutivo: " . $state['consecutive_giallo'] . " (Atteso: 0)\n";

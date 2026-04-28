@@ -23,20 +23,20 @@ Il sistema valuta lo stato di salute analizzando tre sensori critici in parallel
 3.  **DI-Server (SOAP)**: Test di connettività profonda verso il DI-Server di SAP tramite chiamata SOAP.
 
 ### Soglie di Stato (Thresholds)
-- **🟢 VERDE (Operativo)**: Latenza peggiore < 200ms. Il sistema è fluido.
-- **🟡 GIALLO (Degradato)**: Latenza tra 200ms e 2000ms. Rilevata congestione SQL o IIS.
-- **🔴 ROSSO (Critico)**: Latenza > 2000ms o servizio Offline. Il sistema è in blocco.
+- **🟢 VERDE (Operativo)**: Latenza peggiore < 800ms. Il sistema è fluido.
+- **🟡 GIALLO (Degradato)**: Latenza tra 800ms e 3000ms. Rilevata congestione SQL o IIS.
+- **🔴 ROSSO (Critico)**: Latenza > 3000ms o servizio Offline. Il sistema è in blocco.
 
 ---
 
 ## 3. Logica di Intervento ed Escalation (Self-Healing)
 Quando il sistema esce dallo stato VERDE, l'orchestratore (`SapServiceHandler`) esegue azioni correttive automatiche basate su una logica a 3 livelli:
 
-| Livello | Condizione | Azione Tecnica | Notifica WhatsApp | Effetto sulla Pipeline |
+| Livello | Condizione | Azione Tecnica | Notifica Telegram | Effetto sulla Pipeline |
 | :--- | :--- | :--- | :--- | :--- |
-| **1** | **GIALLO** (1° e 2° check) | `runSqlCleanup()`: Kill dei processi SQL pendenti (>4 ore). | Alert "Lentezza" (1 ogni 60m) | **EXIT** (Batch interrotto) |
-| **2** | **ESCALATION** (3° GIALLO cons.) | `runSqlReset()`: Reset totale servizi SAP/IIS dopo persistenza errore. | Alert "Escalation Critica" | **EXIT** (Batch interrotto) |
-| **3** | **ROSSO** (Ping > 2000ms) | `runSqlReset()`: Avvio immediato manovra di ripristino IIS/SAP. | Alert "Stato Critico" | **EXIT** (Batch interrotto) |
+| **1** | **GIALLO** (1°-4° check) | `runSqlCleanup()`: Kill dei processi SQL pendenti (>4 ore). | Alert "Lentezza" (1 ogni 60m) | **EXIT** (Batch interrotto) |
+| **2** | **ESCALATION** (5° GIALLO cons.) | `runSqlReset()`: Reset totale servizi SAP/IIS dopo persistenza errore. | Alert "Escalation Critica" | **EXIT** (Batch interrotto) |
+| **3** | **ROSSO** (Ping > 3000ms) | `runSqlReset()`: Avvio immediato manovra di ripristino IIS/SAP. | Alert "Stato Critico" | **EXIT** (Batch interrotto) |
 
 ### Il "Firewall" in `setInvoiceCurl.php`
 L'integrazione nel cronjob di fatturazione garantisce l'integrità dei dati:
@@ -60,9 +60,9 @@ Il file `telemetry.json` mantiene lo storico completo degli ultimi **7 giorni**.
 - **Performance**: Chart.js legge questo file per visualizzare l'andamento analitico senza campionamenti.
 
 ### Anti-Spam e Stato (Persistenza Condivisa)
-Il file `state.json` gestisce la memoria a breve termine del sistema.
+$file `state.json` gestisce la memoria a breve termine del sistema.
 - **Gestione Atomica**: Lo stato è caricato in un buffer di classe unico per evitare conflitti tra contatori e allarmi.
-- **WhatsApp Cooldown**: Il sistema non invia più di un alert ogni **60 minuti** per lo stesso stato di degrado.
+- **Telegram Cooldown**: Il sistema non invia più di un alert ogni **60 minuti** per lo stesso stato di degrado.
 - **Normalizzazione**: Gli stati sono standardizzati in `VERDE`, `GIALLO`, `ROSSO`.
 
 ---
