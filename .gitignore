@@ -8,6 +8,7 @@ fatture/
 .phpunit.result.cache
 phpunit.xml
 /tests/
+guardian/tests/
 
 # Dati del Guardiano (Non esportare la telemetria)
 guardian/data/
