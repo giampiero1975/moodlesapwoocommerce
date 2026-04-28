@@ -171,4 +171,4 @@ echo "pass: ". $mailboxes::MAILBOXES['mdl_psicologiainformazione']['pass'];
 */
     // TELEGRAM NOTIFICATIONS
     define('TELEGRAM_BOT_TOKEN', '8731672846:AAFQey2ZfyjOXXAmiQrcW9zUL_hRC1m1tAk');
-    define('TELEGRAM_CHAT_ID', '44238515');
+    define('TELEGRAM_CHAT_ID', '7358718597');
