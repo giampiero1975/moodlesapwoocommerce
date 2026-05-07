@@ -43,23 +43,23 @@ class SapServiceHandler {
             $ms = round($info['total_time'] * 1000, 2);
             $isAlive = ($info['http_code'] > 0);
             
-            // Se il ping è "Accettabile" (VERDE o GIALLO, quindi sotto i 3000ms),
+            // Se il ping è "Accettabile" (VERDE o GIALLO, quindi sotto i 150ms),
             // fermiamo subito il ciclo. Il server è sveglio!
-            if ($isAlive && $ms < 800) {
+            if ($isAlive && $ms < 150) {
                 break;
             }
             
-            // Se siamo qui, il ping è fallito o è lentissimo (> 3000ms).
+            // Se siamo qui, il ping è fallito o è lentissimo (> 500ms).
             // Se non è l'ultimo tentativo, aspettiamo 2 secondi e riproviamo.
             if ($attempt < $maxRetries) {
                 sleep(2);
             }
         }
         
-        // Calcoliamo lo stato finale in base all'esito dell'ultimo tentativo valido
+        // Calcoliamo lo stato finale in base all'esito dell'ultimo tentativo valido (Soglie WEB: VERDE < 150ms, GIALLO 150-500ms, ROSSO > 500ms)
         if (!$isAlive) { $stato = "⚫ OFFLINE"; }
-        elseif ($ms < 800) { $stato = "🟢 VERDE"; }
-        elseif ($ms <= 3000) { $stato = "🟡 GIALLO"; } // Allineato alla logica dell'orchestratore
+        elseif ($ms < 150) { $stato = "🟢 VERDE"; }
+        elseif ($ms <= 500) { $stato = "🟡 GIALLO"; }
         else { $stato = "🔴 ROSSO"; }
         
         return [
@@ -159,9 +159,16 @@ class SapServiceHandler {
         $ms = round((microtime(true) - $start) * 1000, 2);
         $isAlive = ($info['http_code'] > 0);
 
+        // Soglie SOAP: VERDE < 800ms, GIALLO 800-3000ms, ROSSO > 3000ms
+        $stato = "VERDE";
+        if (!$isAlive) { $stato = "OFFLINE"; }
+        elseif ($ms > 3000) { $stato = "ROSSO"; }
+        elseif ($ms >= 800) { $stato = "GIALLO"; }
+
         return [
             'is_alive' => $isAlive,
-            'total_time_ms' => $ms
+            'total_time_ms' => $ms,
+            'stato' => $stato
         ];
     }
 
@@ -173,8 +180,18 @@ class SapServiceHandler {
         $worst_ping = max($web['total_time_ms'], $db['total_time_ms'], $soap['total_time_ms']);
         $is_alive = $web['is_alive'] && $db['is_alive'] && $soap['is_alive'];
         
-        if ($db['is_alive'] && !$db['deep_test'] && $worst_ping < 3000) {
-            $worst_ping = 3500; // Forziamo rosso se DB è timeoutato/bloccato pesantemente su query
+        // Estrazione degli stati dei singoli componenti
+        $web_status = (!$web['is_alive']) ? "ROSSO" : (($web['total_time_ms'] > 500) ? "ROSSO" : (($web['total_time_ms'] > 150) ? "GIALLO" : "VERDE"));
+        $db_status = (!$db['is_alive']) ? "ROSSO" : (($db['total_time_ms'] > 3000 || !$db['deep_test']) ? "ROSSO" : (($db['total_time_ms'] > 800) ? "GIALLO" : "VERDE"));
+        $soap_status = (!$soap['is_alive']) ? "ROSSO" : (($soap['total_time_ms'] > 3000) ? "ROSSO" : (($soap['total_time_ms'] > 800) ? "GIALLO" : "VERDE"));
+        
+        if ($web_status === "ROSSO" || $db_status === "ROSSO" || $soap_status === "ROSSO" || !$is_alive) {
+            $stato = "ROSSO";
+            $worst_ping = max($worst_ping, 3500);
+        } elseif ($web_status === "GIALLO" || $db_status === "GIALLO" || $soap_status === "GIALLO") {
+            $stato = "GIALLO";
+        } else {
+            $stato = "VERDE";
         }
 
         if (!$is_alive) {
@@ -184,7 +201,7 @@ class SapServiceHandler {
         return [
             'is_alive' => $is_alive,
             'total_time_ms' => $worst_ping,
-            'stato' => ($worst_ping > 3000) ? "ROSSO" : (($worst_ping > 800) ? "GIALLO" : "VERDE"),
+            'stato' => $stato,
             'web' => $web,
             'db' => $db,
             'soap' => $soap
@@ -216,12 +233,12 @@ class SapServiceHandler {
         $final_label = "";
         $ps_info = "Check non eseguito";
         
-        switch (true) {
+        switch ($stats['stato']) {
 
             // ---------------------------------------------------------------
-            // LIVELLO 3: ROSSO DIRETTO — ping > 3000ms (emergenza catastrofica)
+            // LIVELLO 3: ROSSO DIRETTO — emergenza catastrofica
             // ---------------------------------------------------------------
-            case ($ping > 3000):
+            case 'ROSSO':
                 echo "2. AZIONE: Stato CRITICO (ROSSO). Avvio Manovra Rossa...<br>";
                 $this->stateData['consecutive_giallo'] = 0;
                 $this->saveState();
@@ -234,7 +251,6 @@ class SapServiceHandler {
 
                 $id_log = $this->iniziaLog('ROSSO', $stats, 'Recupero di Emergenza SAP/SQL');
                 $res_job = $this->runSqlReset();
-                $this->runIisReset();
                 
                 if (strpos($res_job, 'ERRORE') !== false) {
                     $this->chiudiLog($id_log, $ping, false, "Timeout SQL", "FALLITO");
@@ -248,10 +264,10 @@ class SapServiceHandler {
                 $post_stats = $this->getCombinedSystemHealth();
                 $ps_info = $this->getSystemUptimeCheck();
                 $ms_post = $post_stats['total_time_ms'];
-                $is_success = ($post_stats['is_alive'] === true && $ms_post < 3000);
+                $is_success = ($post_stats['is_alive'] === true && $post_stats['stato'] !== 'ROSSO');
                 
                 if ($is_success) {
-                    $final_label = ($ms_post < 800) ? "VERDE" : "RIPRISTINATO";
+                    $final_label = ($post_stats['stato'] === 'VERDE') ? "VERDE" : "RIPRISTINATO";
                     if ($this->checkAntiSpam('VERDE')) {
                         $msg = "SAP MONITOR - STATO: OPERATIVO. Sistema ripristinato (Ping: {$ms_post} ms).";
                         $res_tg = $this->sendTelegramAlert($msg);
@@ -265,9 +281,9 @@ class SapServiceHandler {
                 return $is_success;
                 
             // ---------------------------------------------------------------
-            // LIVELLO 1 + 2: GIALLO — ping tra 800ms e 3000ms
+            // LIVELLO 1 + 2: GIALLO — stato degradato
             // ---------------------------------------------------------------
-            case ($ping >= 800 && $ping <= 3000):
+            case 'GIALLO':
                 $consecutiveGiallo++;
                 $this->stateData['consecutive_giallo'] = $consecutiveGiallo;
                 $this->saveState();
@@ -284,7 +300,6 @@ class SapServiceHandler {
                     
                     $id_log = $this->iniziaLog('ROSSO', $stats, "Escalation Automatica ({$consecutiveGiallo} cicli GIALLO)");
                     $this->runSqlReset();
-                    $this->runIisReset();
                     $this->aggiornaStatoJob($id_log, true);
                     
                     echo "   Reset escalation inviato. Pausa di 3 minuti...<br>";
@@ -293,7 +308,7 @@ class SapServiceHandler {
                     $post_stats = $this->getCombinedSystemHealth();
                     $ps_info = $this->getSystemUptimeCheck();
                     $ms_post = $post_stats['total_time_ms'];
-                    $is_success = ($post_stats['is_alive'] === true && $ms_post < 3000);
+                    $is_success = ($post_stats['is_alive'] === true && $post_stats['stato'] !== 'ROSSO');
                     
                     // Reset contatore dopo escalation (sia successo che fallimento)
                     $this->stateData['consecutive_giallo'] = 0;

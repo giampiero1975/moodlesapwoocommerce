@@ -22,21 +22,26 @@ Il sistema valuta lo stato di salute analizzando tre sensori critici in parallel
 2.  **Database (SQL Server)**: Verifica connettività e latenza di esecuzione query su MSSQL.
 3.  **DI-Server (SOAP)**: Test di connettività profonda verso il DI-Server di SAP tramite chiamata SOAP.
 
-### Soglie di Stato (Thresholds)
-- **🟢 VERDE (Operativo)**: Latenza peggiore < 800ms. Il sistema è fluido.
-- **🟡 GIALLO (Degradato)**: Latenza tra 800ms e 3000ms. Rilevata congestione SQL o IIS.
-- **🔴 ROSSO (Critico)**: Latenza > 3000ms o servizio Offline. Il sistema è in blocco.
+### Soglie di Stato (Thresholds) Differenziate
+- **Componente WEB (IIS)**:
+  - 🟢 **VERDE**: $< 150\text{ ms}$
+  - 🟡 **GIALLO**: $150\text{ ms} - 500\text{ ms}$
+  - 🔴 **ROSSO**: $> 500\text{ ms}$
+- **Componente SOAP (DI-Server)**:
+  - 🟢 **VERDE**: $< 800\text{ ms}$
+  - 🟡 **GIALLO**: $800\text{ ms} - 3000\text{ ms}$
+  - 🔴 **ROSSO**: $> 3000\text{ ms}$
 
 ---
 
 ## 3. Logica di Intervento ed Escalation (Self-Healing)
-Quando il sistema esce dallo stato VERDE, l'orchestratore (`SapServiceHandler`) esegue azioni correttive automatiche basate su una logica a 3 livelli:
+Quando il sistema rileva uno stato degradato o critico, l'orchestratore (`SapServiceHandler`) esegue azioni correttive automatiche basate su una logica a 3 livelli, delegando la manovra di riavvio interamente al Job SQL (coordinato tramite il file `.bat` remoto) per prevenire collisioni di processo:
 
 | Livello | Condizione | Azione Tecnica | Notifica Telegram | Effetto sulla Pipeline |
 | :--- | :--- | :--- | :--- | :--- |
 | **1** | **GIALLO** (1°-4° check) | `runSqlCleanup()`: Kill dei processi SQL pendenti (>4 ore). | Alert "Lentezza" (1 ogni 60m) | **EXIT** (Batch interrotto) |
-| **2** | **ESCALATION** (5° GIALLO cons.) | `runSqlReset()`: Reset totale servizi SAP/IIS dopo persistenza errore. | Alert "Escalation Critica" | **EXIT** (Batch interrotto) |
-| **3** | **ROSSO** (Ping > 3000ms) | `runSqlReset()`: Avvio immediato manovra di ripristino IIS/SAP. | Alert "Stato Critico" | **EXIT** (Batch interrotto) |
+| **2** | **ESCALATION** (5° GIALLO cons.) | `runSqlReset()`: Reset coordinato (Stop/Pulizia/Start) via Job SQL. | Alert "Escalation Critica" | **EXIT** (Batch interrotto) |
+| **3** | **ROSSO** (Stato Critico rilevato) | `runSqlReset()`: Reset coordinato (Stop/Pulizia/Start) via Job SQL. | Alert "Stato Critico" | **EXIT** (Batch interrotto) |
 
 ### Il "Firewall" in `setInvoiceCurl.php`
 L'integrazione nel cronjob di fatturazione garantisce l'integrità dei dati:
@@ -72,7 +77,8 @@ $file `state.json` gestisce la memoria a breve termine del sistema.
 ### Dashboard (`/guardian/ui/dashboard.php`)
 Visualizza in tempo reale:
 - Stato "semaforico" dei sensori (IIS, DB, SAP).
-- Grafici storici (Real-time e Dettaglio Auto-Scale).
+- **Grafico Real-Time**: Andamento complessivo delle latenze dell'intera settimana con linea di soglia visiva.
+- **Grafico Zoom Giornaliero (Dettaglio Variazioni)**: Ingrandimento dinamico ad auto-scale che pre-seleziona l'ultima giornata per un esame dettagliato dei flussi e consente di saltare istantaneamente ad altri giorni storici tramite selettore integrato in JavaScript.
 - Storico degli interventi reali (Tabella `log_ws_sap`).
 - Uptime dei processi Windows (SAP B1 e IIS).
 

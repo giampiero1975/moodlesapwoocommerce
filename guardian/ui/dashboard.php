@@ -542,10 +542,16 @@ $data = $sapHandler->getFullDiagnostics($filters);
         <canvas id="latencyChart" height="80"></canvas>
     </div>
 
-    <!-- Grafico Dettaglio -->
+    <!-- Grafico Dettaglio (Zoom Giornaliero) -->
     <div class="card" style="margin-bottom: 30px; border-top: 5px solid #3498db !important;">
-        <div class="card-header">
-            <span class="card-title">🔍 Dettaglio Variazioni (Auto-Scale)</span>
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <span class="card-title">🔍 Dettaglio Variazioni (Zoom Giornaliero)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="dayFilter" style="font-size: 12px; font-weight: bold; color: var(--text-muted);">Seleziona Giorno:</label>
+                <select id="dayFilter" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 13px; font-weight: bold; cursor: pointer; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <option value="all">Mostra Tutti (Intera Settimana)</option>
+                </select>
+            </div>
         </div>
         <canvas id="detailChart" height="80"></canvas>
     </div>
@@ -748,33 +754,66 @@ $data = $sapHandler->getFullDiagnostics($filters);
         }]
     });
 
-    // Rendering Grafico Dettaglio (Auto-Scale)
+    // Rendering Grafico Dettaglio (Zoom Giornaliero con Auto-Scale)
     const ctxDetail = document.getElementById('detailChart').getContext('2d');
-    new Chart(ctxDetail, {
+    const dayFilter = document.getElementById('dayFilter');
+
+    // Estraiamo tutti i giorni unici presenti nei log
+    const uniqueDays = [...new Set(chartData.map(l => l.date.split(' ')[0]))];
+
+    // Popoliamo la select con i giorni disponibili
+    uniqueDays.forEach(day => {
+        const option = document.createElement('option');
+        option.value = day;
+        option.textContent = day;
+        dayFilter.appendChild(option);
+    });
+
+    // Selezioniamo l'ultimo giorno disponibile come zoom predefinito
+    if (uniqueDays.length > 0) {
+        dayFilter.value = uniqueDays[uniqueDays.length - 1];
+    }
+
+    // Filtriamo i dati in base al giorno selezionato
+    const getFilteredData = (selectedDay) => {
+        return selectedDay === 'all' 
+            ? chartData 
+            : chartData.filter(l => l.date.startsWith(selectedDay));
+    };
+
+    let initialFiltered = getFilteredData(dayFilter.value);
+
+    const detailChart = new Chart(ctxDetail, {
         type: 'line',
         data: {
-            labels: chartData.map(l => l.date),
+            labels: initialFiltered.map(l => l.date),
             datasets: [
                 {
                     label: 'IIS Web (ms)',
-                    data: chartData.map(l => l.web),
+                    data: initialFiltered.map(l => l.web),
                     borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.05)',
                     tension: 0.4,
-                    pointRadius: 2
+                    pointRadius: 2,
+                    fill: true
                 },
                 {
                     label: 'Database SQL (ms)',
-                    data: chartData.map(l => l.db),
+                    data: initialFiltered.map(l => l.db),
                     borderColor: '#f1c40f',
+                    backgroundColor: 'rgba(241, 196, 15, 0.05)',
                     tension: 0.4,
-                    pointRadius: 2
+                    pointRadius: 2,
+                    fill: true
                 },
                 {
                     label: 'SAP SOAP (ms)',
-                    data: chartData.map(l => l.soap),
+                    data: initialFiltered.map(l => l.soap),
                     borderColor: '#9b59b6',
+                    backgroundColor: 'rgba(155, 89, 182, 0.05)',
                     tension: 0.4,
-                    pointRadius: 3
+                    pointRadius: 3,
+                    fill: true
                 }
             ]
         },
@@ -789,6 +828,16 @@ $data = $sapHandler->getFullDiagnostics($filters);
                 x: { grid: { display: false } }
             }
         }
+    });
+
+    // Aggiorna il grafico in tempo reale alla selezione del giorno
+    dayFilter.addEventListener('change', (e) => {
+        const selectedData = getFilteredData(e.target.value);
+        detailChart.data.labels = selectedData.map(l => l.date);
+        detailChart.data.datasets[0].data = selectedData.map(l => l.web);
+        detailChart.data.datasets[1].data = selectedData.map(l => l.db);
+        detailChart.data.datasets[2].data = selectedData.map(l => l.soap);
+        detailChart.update();
     });
 </script>
 
