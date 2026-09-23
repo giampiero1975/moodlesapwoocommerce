@@ -3,6 +3,8 @@ logs/
 fatture/
 
 # Dipendenze e Autoload (Tracciato su Git senza PHPUnit)
+woocommerce/vendor/
+woocommerce/config_db.php
 
 # Test e Mocking
 .phpunit.result.cache
