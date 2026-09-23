@@ -5,13 +5,15 @@
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../config_db.php'; // Carica costanti DB e PayPal
+require_once __DIR__ . '/../../inc/config.php'; // Carica URL applicativo per i rilanci SAP
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 // Connessione 1 (Moodle New)
 try {
-    $pdo_new = new PDO("mysql:host=192.168.11.16;dbname=mdlapps_moodleadmin;charset=utf8mb4", 'mdlapps', 'RmnPbT78', [
+    $pdo_new = new PDO("mysql:host=" . DB_HOST_MDLAPPS . ";dbname=" . DB_NAME_MDLAPPS . ";charset=utf8mb4", DB_USER_MDLAPPS, DB_PASS_MDLAPPS, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
@@ -20,16 +22,20 @@ try {
 }
 
 // Connessione 2 (Moodle Old)
-try {
-    $pdo_old = new PDO("mysql:host=dbmoodle.met.dmz;dbname=mdlapps_moodleadmin;charset=utf8mb4", 'moodle', 'RmnPbT78', [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-    ]);
-} catch (PDOException $e) {
-    die("Errore connessione Moodle Old: " . $e->getMessage());
+$pdo_old = null;
+if (
+    defined('ENABLE_MOODLE_OLD_RECONCILIATION') && ENABLE_MOODLE_OLD_RECONCILIATION
+    && defined('DB_HOST_MDLAPPS_OLD') && DB_HOST_MDLAPPS_OLD !== ''
+) {
+    try {
+        $pdo_old = new PDO("mysql:host=" . DB_HOST_MDLAPPS_OLD . ";dbname=" . DB_NAME_MDLAPPS_OLD . ";charset=utf8mb4", DB_USER_MDLAPPS_OLD, DB_PASS_MDLAPPS_OLD, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+        ]);
+    } catch (PDOException $e) {
+        error_log("confronto_paypal.php: Moodle Old non disponibile: " . $e->getMessage());
+    }
 }
-
-require_once '../config_db.php'; // Carica costanti PayPal (CLIENT_ID, SECRET)
 
 class PayPalScanner {
     private $clientId;
@@ -106,8 +112,10 @@ $totalPages = 1; // verrà ricalcolato dopo filtro + ordinamento
 // PRE-PROCESSING: Riconciliazione DB su tutte le transazioni caricate
 // (indispensabile quando il filtro host è attivo, per poter paginare sui risultati filtrati)
 $checkDb = function($pdo, $table, $txId) {
+    if (!$pdo) return false;
+
     if ($table === 'moodle_payments') {
-        $stmt = $pdo->prepare("SELECT mp.id, mp.sales, mp.logfile, i.nfattura 
+        $stmt = $pdo->prepare("SELECT mp.id, mp.sales, mp.logfile, i.nfattura, i.cardcode 
                                FROM moodle_payments mp 
                                LEFT JOIN invoice i ON mp.id = i.moodle_payment_id 
                                WHERE mp.transaction_id = :txId LIMIT 1");
@@ -154,7 +162,7 @@ foreach ($paypalTxs as $tx) {
         $isOld = ($hostTrovato === 'Moodle Old');
         if (!$isOld) {
             foreach (WC_INSTANCE_MAPPING as $prefix => $mapped) {
-                if (str_starts_with($itemName, $prefix) && $mapped['host'] === 'dbmoodle.met.dmz') {
+                if (str_starts_with($itemName, $prefix) && ($mapped['host'] ?? '') === 'dbmoodle.met.dmz') {
                     $isOld = true; break;
                 }
             }
@@ -183,6 +191,9 @@ foreach ($paypalTxs as $tx) {
         '_sales'       => $matchData['sales'] ?? null,
         '_logfile'     => $matchData['logfile'] ?? null,
         '_db_id'       => $matchData['id'] ?? null,
+        '_cardcode'    => $matchData['cardcode'] ?? '',
+        '_fee_amount'  => (float)($info['fee_amount']['value'] ?? 0),
+        '_net_amount'  => (float)($info['transaction_amount']['value'] ?? 0) - abs((float)($info['fee_amount']['value'] ?? 0)),
     ]);
 }
 
@@ -200,7 +211,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     $sheet->setTitle('Riconciliazione PayPal');
 
     // Intestazioni
-    $headers = ['Data', 'Transaction ID', 'Prodotto / Causale', 'Cliente', 'Email', 'Importo', 'Valuta', 'N. Fattura', 'Stato', 'Sistema', 'Tabella'];
+    $headers = ['Data', 'Transaction ID', 'Prodotto / Causale', 'CARDCODE', 'Cliente', 'Email', 'Importo', 'Incasso', 'N. Fattura', 'Stato', 'Sistema', 'Tabella'];
     foreach ($headers as $i => $h) {
         $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1) . '1';
         $sheet->setCellValue($cell, $h);
@@ -218,7 +229,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
             $nf = $tx['_nfattura'];
             $sales = $tx['_sales'];
             $logs = $tx['_logfile'];
-            if ($sales == 1) $labelStato = $nf ?: 'EVASO';
+            if ($sales == 1) $labelStato = 'PAGATO';
             elseif ($sales == 0 && empty($logs)) $labelStato = 'DA EVADERE';
             elseif ($sales == 0 && !empty($logs)) $labelStato = 'ERRORE';
         }
@@ -226,20 +237,21 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
         $sheet->setCellValue('A' . $rowNum, date('d/m/Y H:i', strtotime($info['transaction_initiation_date'])));
         $sheet->setCellValue('B' . $rowNum, trim($info['transaction_id']));
         $sheet->setCellValue('C' . $rowNum, $tx['cart_info']['item_details'][0]['item_name'] ?? 'N/A');
-        $sheet->setCellValue('D' . $rowNum, $payerData['payer_name']['alternate_full_name'] ?? 'N/D');
-        $sheet->setCellValue('E' . $rowNum, $payerData['email_address'] ?? 'N/D');
-        $sheet->setCellValue('F' . $rowNum, (float)$info['transaction_amount']['value']);
-        $sheet->setCellValue('G' . $rowNum, $info['transaction_amount']['currency_code']);
-        $sheet->setCellValue('H' . $rowNum, $tx['_nfattura'] ?? '');
-        $sheet->setCellValue('I' . $rowNum, $labelStato);
-        $sheet->setCellValue('J' . $rowNum, $tx['_fonte']);
-        $sheet->setCellValue('K' . $rowNum, $tx['_tabella']);
+        $sheet->setCellValue('D' . $rowNum, $tx['_cardcode'] ?? '');
+        $sheet->setCellValue('E' . $rowNum, $payerData['payer_name']['alternate_full_name'] ?? 'N/D');
+        $sheet->setCellValue('F' . $rowNum, $payerData['email_address'] ?? 'N/D');
+        $sheet->setCellValue('G' . $rowNum, (float)$info['transaction_amount']['value']);
+        $sheet->setCellValue('H' . $rowNum, $tx['_net_amount']);
+        $sheet->setCellValue('I' . $rowNum, $tx['_nfattura'] ?? '');
+        $sheet->setCellValue('J' . $rowNum, $labelStato);
+        $sheet->setCellValue('K' . $rowNum, $tx['_fonte']);
+        $sheet->setCellValue('L' . $rowNum, $tx['_tabella']);
         
         $rowNum++;
     }
 
     // Auto-size colonne
-    foreach (range('A', 'K') as $col) {
+    foreach (range('A', 'L') as $col) {
         $sheet->getColumnDimension($col)->setAutoSize(true);
     }
 
@@ -488,11 +500,14 @@ $processedTxs = array_slice($processedTxs, ($page - 1) * $pageSize, $pageSize);
                         </div>
                         <div class="detail-box">
                             <b>Azioni Operative</b>
+                            <?php 
+                            $baseLink = 'http://' . costanti::URL;
+                            ?>
                             <?php if ($tx['_tabella'] === 'moodle_payments' && $tx['_sales'] == 0 && $tx['_db_id']): ?>
-                                <a href="http://moodlesapwoocommerce.metmi.lan/index.php/sap/ins?id=<?php echo $tx['_db_id']; ?>" target="_blank" class="btn-sap">🚀 Rilancio SAP</a>
+                                <a href="<?php echo $baseLink; ?>/index.php/sap/ins?id=<?php echo $tx['_db_id']; ?>" target="_blank" class="btn-sap">🚀 Rilancio SAP</a>
                             <?php endif; ?>
                             <?php if (!empty($tx['_logfile']) && $tx['_tabella'] === 'moodle_payments' && $tx['_sales'] == 0): ?>
-                                <a href="http://moodlesapwoocommerce.metmi.lan/logs/<?php echo $tx['_logfile']; ?>" target="_blank" class="btn-log">📋 Log Errore</a>
+                                <a href="<?php echo $baseLink; ?>/logs/<?php echo $tx['_logfile']; ?>" target="_blank" class="btn-log">📋 Log Errore</a>
                             <?php endif; ?>
                         </div>
                     </div>
