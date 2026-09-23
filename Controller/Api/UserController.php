@@ -18,23 +18,42 @@ class UserController extends BaseController
     
     public function insInvoice()
     {
-        $logger = Logger::get_logger();
-        $this->nome_log = $logger->logname;
-        $logger->do_write("\nmethod: " . __METHOD__);
         $config = new costanti();
         
         // 1. Recupera i dati base dalla tabella 'moodle_payments'.
         $this->arrQueryStringParams = $this->getQueryStringParams();
+        $paymentId = (int)($this->arrQueryStringParams["id"] ?? 0);
+
+        $logger = Logger::get_logger();
+        if ($paymentId > 0) {
+            $logger->useLogFile($paymentId . '_' . date('Ymd_His') . '.log');
+        }
+        $this->nome_log = $logger->logname;
+        $logger->do_write("\nmethod: " . __METHOD__);
+
+        if ($paymentId <= 0) {
+            $logger->log("ID pagamento non valido o mancante.");
+            echo "ID pagamento non valido o mancante.";
+            return false;
+        }
+
+        if (! $this->acquirePaymentLock($paymentId)) {
+            return false;
+        }
+
+        if (! $this->ensurePaymentHasNoInvoice($paymentId)) {
+            return false;
+        }
         
-        $paymentDetails = $this->getMoodlePayments($this->arrQueryStringParams["id"]);
+        $paymentDetails = $this->getMoodlePayments($paymentId);
         $this->arrQueryStringParams = $paymentDetails;
         $logger->dump($this->arrQueryStringParams);
-        
+
         try {
             // 2. GET dei dati da WooCommerce tramite API
             $wcModel = new WooCommerceModel($paymentDetails['mdl']);
             $orderData = $wcModel->getOrderById($paymentDetails['payment_id']);
-            
+
             if (! $orderData) {
                 $logger->log("Errore: Impossibile recuperare i dati dell'ordine " . $paymentDetails['payment_id'] . " da WooCommerce.");
                 $this->emailMessagge([
@@ -49,6 +68,7 @@ class UserController extends BaseController
             $this->userMoodle = $this->mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails);
             $logger->log("Dati mappati da WooCommerce:");
             $logger->dump($this->userMoodle);
+
             if ($this->userMoodle === false) {
                 return;
             }
@@ -67,11 +87,11 @@ class UserController extends BaseController
             ]);
             exit();
         }
-        
+
         # GET sap
         if (! $this->BPSAP = $this->getSapUser())
             exit();
-            
+
             # Verifico allineamento utente SAP/Cliente
             if (! $this->checkAlignUser = $this->alignUser())
                 exit();
@@ -104,23 +124,33 @@ class UserController extends BaseController
                         
                         $userModel = new dbmoodle('mdlapps_moodleadmin');
                         
-                        $sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`, `nfattura`, `moodle_payment_id`)" .
-                            " VALUES ('" . $this->arrQueryStringParams['mdl'] . "', " .
-                            $this->arrQueryStringParams['userid'] . ", '" .
-                            $this->arrQueryStringParams['courseid'] . "', '" .
-                            $this->BPSAP['cardcode'] . "', '" .
-                            $this->BPSAP['cardname'] . "', '" .
-                            $this->BPSAP['AddId'] . "', '" .
-                            $this->BPSAP['partitaiva'] . "', '" .
-                            $this->datiInvoice['docnum'] . "', '" .
-                            $this->arrQueryStringParams['id'] . "');";
-                        
-                        if (! $userModel->create($sql)) {
+                        $sql = "INSERT INTO `invoice` (`mdl`, `userid`, `courseid`, `cardcode`, `cardname`, `codicefiscale`, `partitaiva`, `nfattura`, `moodle_payment_id`)
+                            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+                            FROM DUAL
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM `invoice` WHERE `moodle_payment_id` = ?
+                            );";
+                        $invoiceStmt = $userModel->create($sql, [
+                            $this->arrQueryStringParams['mdl'],
+                            $this->arrQueryStringParams['userid'],
+                            $this->arrQueryStringParams['courseid'],
+                            $this->BPSAP['cardcode'],
+                            $this->BPSAP['cardname'],
+                            $this->BPSAP['AddId'],
+                            $this->BPSAP['partitaiva'],
+                            $this->datiInvoice['docnum'],
+                            $this->arrQueryStringParams['id'],
+                            $this->arrQueryStringParams['id'],
+                        ]);
+
+                        if (! $invoiceStmt || $invoiceStmt->rowCount() !== 1) {
                             $logger->log("problemi inserendo la fattura: " . $sql);
+                            $logger->log("Invoice gia' presente o insert non eseguito. Blocco per evitare doppia fatturazione. Payment ID: " . $this->arrQueryStringParams['id']);
                             return false;
                         }
                         
-                        $sql = "UPDATE `moodle_payments` set sales='1' WHERE id='" . $this->arrQueryStringParams['id'] . "';";
+                        $logFileName = basename($this->nome_log);
+                        $sql = "UPDATE `moodle_payments` set sales='1', logfile='" . $logFileName . "' WHERE id='" . $this->arrQueryStringParams['id'] . "';";
                         if (! $userModel->create($sql)) {
                             $logger->log("problemi aggiornando i pagamenti paypal: " . $sql);
                             return false;
@@ -153,6 +183,73 @@ class UserController extends BaseController
                     return TRUE;
     }
     
+    private function acquirePaymentLock(int $paymentId): bool
+    {
+        $logger = Logger::get_logger();
+        $lockTag = 'IN_CORSO_' . date('Ymd_His');
+        $paymentModel = new dbmoodle('mdlapps_moodleadmin');
+        $stmt = $paymentModel->create(
+            "UPDATE moodle_payments
+             SET logfile = ?
+             WHERE id = ?
+               AND sales = '0'
+               AND (logfile IS NULL OR logfile = '' OR logfile NOT LIKE 'IN_CORSO_%')
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM invoice
+                   WHERE invoice.moodle_payment_id = moodle_payments.id
+               )",
+            [$lockTag, $paymentId]
+        );
+
+        if (! $stmt || $stmt->rowCount() !== 1) {
+            $rows = $paymentModel->select(
+                "SELECT mp.id, mp.sales, mp.logfile, i.nfattura
+                 FROM moodle_payments mp
+                 LEFT JOIN invoice i ON i.moodle_payment_id = mp.id
+                 WHERE mp.id = ?",
+                [$paymentId]
+            );
+            $current = $rows[0] ?? null;
+            $logger->log("Pagamento non preso in carico. ID {$paymentId}. Stato corrente: " . var_export($current, true));
+            echo "Pagamento gia' in lavorazione o gia' evaso. ID: " . htmlspecialchars((string)$paymentId, ENT_QUOTES, 'UTF-8');
+            if ($current) {
+                echo "<br>sales=" . htmlspecialchars((string)$current['sales'], ENT_QUOTES, 'UTF-8');
+                echo "<br>logfile=" . htmlspecialchars((string)$current['logfile'], ENT_QUOTES, 'UTF-8');
+                if (!empty($current['nfattura'])) {
+                    echo "<br>fattura=" . htmlspecialchars((string)$current['nfattura'], ENT_QUOTES, 'UTF-8');
+                }
+            }
+            return false;
+        }
+
+        $logger->log("Pagamento preso in carico con lock {$lockTag}. ID {$paymentId}");
+        return true;
+    }
+
+    private function ensurePaymentHasNoInvoice(int $paymentId): bool
+    {
+        $logger = Logger::get_logger();
+        $paymentModel = new dbmoodle('mdlapps_moodleadmin');
+        $rows = $paymentModel->select(
+            "SELECT id, nfattura, moodle_payment_id FROM invoice WHERE moodle_payment_id = ? ORDER BY id DESC",
+            [$paymentId]
+        );
+
+        if (empty($rows)) {
+            return true;
+        }
+
+        $logger->log("Invoice gia' presente prima della chiamata SAP. Blocco fatturazione. Payment ID: {$paymentId}. Righe invoice: " . var_export($rows, true));
+        $paymentModel->create(
+            "UPDATE moodle_payments SET sales = '1' WHERE id = ? AND sales = '0'",
+            [$paymentId]
+        );
+        echo "Pagamento gia' fatturato. ID: " . htmlspecialchars((string)$paymentId, ENT_QUOTES, 'UTF-8');
+        echo "<br>fattura=" . htmlspecialchars((string)$rows[0]['nfattura'], ENT_QUOTES, 'UTF-8');
+        return false;
+    }
+
     private function mapWooCommerceDataToMoodleStructure($orderData, $paymentDetails)
     {
         // echo "<pre>";
@@ -315,6 +412,8 @@ class UserController extends BaseController
             $payment['userid'] = $paymentsFieldsValue['userid'];
             $payment['cost'] = number_format($paymentsFieldsValue['cost'], 2, '.', ',');
             $payment['tipo'] = $paymentsFieldsValue['method'];
+            $payment['sales'] = $paymentsFieldsValue['sales'];
+            $payment['logfile'] = $paymentsFieldsValue['logfile'];
         }
         return $payment;
     }
@@ -326,9 +425,20 @@ class UserController extends BaseController
             $logger->log("Recupero dati utenti da SAP");
             $userSap = new SapModel();
             $config = new costanti();
-            
+
             $logger->log("getSapUser: Cerco utente con CF: " . $this->userMoodle[0]['CF']);
-            
+
+            if (empty($this->userMoodle[0]['CF'])) {
+                $logger->log("getSapUser: ERRORE - Codice fiscale vuoto, impossibile cercare/creare il BP in SAP.");
+                $array = [
+                    'oggetto' => 'Errore Dati Fiscali WooCommerce',
+                    'destinatario' => 'sap',
+                    'messaggio' => "Codice fiscale mancante per l'utente: " . $this->userMoodle[0]['nome'] . " (ordine WooCommerce: " . ($this->arrQueryStringParams['payment_id'] ?? 'N/D') . ")"
+                ];
+                $this->emailMessagge($array);
+                return false;
+            }
+
             if (! $this->clienteSap = $userSap->getUsers($this->userMoodle[0]['CF'])) {
                 $logger->log("Cliente " . $this->userMoodle[0]['Rag'] . " {" . $this->userMoodle[0]['CF'] . "} non presente su SAP. Tentativo di creazione.");
                 $this->tipodoc = 'bp';
@@ -339,6 +449,16 @@ class UserController extends BaseController
                 if ($this->sendWS($xml) == true) {
                     $logger->log("getSapUser: Utente creato con successo su SAP. Recupero i dati aggiornati.");
                     $this->clienteSap = $userSap->getUsers($this->userMoodle[0]['CF']);
+                    if (! is_array($this->clienteSap)) {
+                        $logger->log("getSapUser: ERRORE - SAP ha accettato la creazione BP, ma il cliente non e' stato ritrovato in OCRD con CF: " . $this->userMoodle[0]['CF']);
+                        $array = [
+                            'oggetto' => 'Errore Recupero Utente SAP',
+                            'destinatario' => 'sap',
+                            'messaggio' => "Il BP risulta creato via web service, ma non viene ritrovato in OCRD per l'utente: " . $this->userMoodle[0]['nome'] . " (CF: " . $this->userMoodle[0]['CF'] . ", ordine WooCommerce: " . ($this->arrQueryStringParams['payment_id'] ?? 'N/D') . ")"
+                        ];
+                        $this->emailMessagge($array);
+                        return false;
+                    }
                 } else {
                     $logger->log("getSapUser: ERRORE CRITICO durante la creazione dell'utente su SAP via Web Service.");
                     $array = [
@@ -350,7 +470,12 @@ class UserController extends BaseController
                     exit();
                 }
             }
-            
+
+            if (! is_array($this->clienteSap)) {
+                $logger->log("getSapUser: ERRORE - dati SAP non validi per CF: " . $this->userMoodle[0]['CF']);
+                return false;
+            }
+
             $logger->log("getSapUser: Utente trovato o creato con successo. Dump dei dati SAP:");
             
             foreach ($this->clienteSap as $key => $value) {
@@ -388,13 +513,18 @@ class UserController extends BaseController
             
             $datiArticolo = $userSap->getItem($item['sku']);
             if (!$datiArticolo) {
-                $logger->log("Problema recuperando l'articolo su SAP {$item['sku']}");
+                $message = "Problema recuperando l'articolo su SAP con codice: {$item['sku']}";
+                $logger->log($message);
                 $array = [
                     'oggetto' => 'Errore Articolo SAP',
                     'destinatario' => 'sap',
-                    'messaggio' => "Problema recuperando l'articolo su SAP con codice: {$item['sku']}"
+                    'messaggio' => $message
                     ];
                 $this->emailMessagge($array);
+                if (defined('costanti::DEBUG_EMAIL') && costanti::DEBUG_EMAIL === true) {
+                    echo "<h2>Errore Articolo SAP</h2><p>" . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . "</p>";
+                    echo "<p>Log: " . htmlspecialchars(basename($this->nome_log), ENT_QUOTES, 'UTF-8') . "</p>";
+                }
                 return false;
             }
             
@@ -1395,14 +1525,19 @@ class UserController extends BaseController
         $piece = explode('/', $this->nome_log);
         $logfilename = end($piece);
         
+        if (defined('costanti::DEBUG_EMAIL') && $config::DEBUG_EMAIL === true) {
+            $destinatario = $config::EMAIL_SYSTEM;
+        }
+        
         $array = [
-            'oggetto' => $array['oggetto'] . " - " . $config::EMAIL_OBJECT,
+            'oggetto' => (($config::DEBUG_EMAIL === true) ? '[TEST SERVER] ' : '') . $array['oggetto'] . " - " . $config::EMAIL_OBJECT,
             'messaggio' => $array['messaggio'] . "<br><br>" . "Per rilanciare la procedura clicca " . "<a href =\"$local" . "id=" . $this->arrQueryStringParams['id'] . "\">qui</a>" . "<br>Dettaglio: <a href=\"http://" . $config::URL . "/logs/" . $logfilename . "\">" . $logfilename . "</a>",
             'destinatario' => $destinatario
         ];
         
         $mail = new send();
-        $mail->sendEmail($array);
+        $sent = $mail->sendEmail($array);
+        $logger->log($sent ? "Email errore inviata a: " . $destinatario : "ERRORE invio email errore a: " . $destinatario);
         
         $log = new MoodleModel('mdlapps_moodleadmin');
         $log->traceLog($this->arrQueryStringParams, $this->nome_log);
