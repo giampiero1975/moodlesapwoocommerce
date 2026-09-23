@@ -1,0 +1,530 @@
+<?php
+/**
+ * woocommerce_helpers.php
+ * Gestisce interazioni con DB WooCommerce e Moodle Payments.
+ * FIX: Supporto dinamico per chiave CF (es. cf_user) e gestione corretta date.
+ */
+use Monolog\Logger;
+
+// --- FUNZIONI HELPER ---
+function checkWooOrderAlreadyQueued(string $wooOrderId, ?string $moodleDbName = null): bool
+{
+    global $log;
+    $conn = DBConnector::getMoodleAppsDb();
+    if (! $conn)
+        return true;
+
+    $sql = "SELECT id FROM moodle_payments WHERE payment_id = ?";
+    if (! empty($moodleDbName)) {
+        $sql .= " AND mdl = ?";
+    }
+    $sql .= " LIMIT 1";
+
+    $exists = true;
+    try {
+        $stmt = $conn->prepare($sql);
+        if ($stmt) {
+            if (! empty($moodleDbName)) {
+                $stmt->bind_param("ss", $wooOrderId, $moodleDbName);
+            } else {
+                $stmt->bind_param("s", $wooOrderId);
+            }
+            if ($stmt->execute()) {
+                $stmt->store_result();
+                $exists = ($stmt->num_rows > 0);
+            }
+            $stmt->close();
+        }
+    } catch (Exception $e) {
+        if (isset($log))
+            $log->error("ECCEZIONE SQL CheckWooOrder: " . $e->getMessage());
+        $exists = true;
+    }
+    return $exists;
+}
+
+/**
+ * Recupera i dettagli dell'ordine e cerca il CF nella chiave specificata ($targetCfKey).
+ * FIX: Aggiunto customer_id per evitare userid = 0 nel DB locale.
+ */
+function getWooCommerceOrderDetails_FROM_DB(string $wooOrderId, string $wpDbName, string $wpPrefix, string $targetCfKey = 'billing_cf'): ?array
+{
+    global $log;
+    $connWp = DBConnector::getWpDbByName($wpDbName);
+    if (! $connWp)
+        return null;
+
+    $orderDetails = null;
+    try {
+        // Rilevamento automatico HPOS / Legacy
+        $hasHPOS = false;
+        $resCheck = $connWp->query("SHOW TABLES LIKE '{$wpPrefix}wc_orders'");
+        if ($resCheck && $resCheck->num_rows > 0) {
+            $hasHPOS = true;
+        }
+
+        if ($hasHPOS) {
+            // --- FLUSSO HPOS (Nuovo) ---
+            // 1. Ordine - AGGIUNTO customer_id NELLA SELECT
+            $sqlOrder = "SELECT id, status, date_created_gmt, date_updated_gmt, total_amount, customer_id FROM {$wpPrefix}wc_orders WHERE id = ? LIMIT 1";
+            $stmtOrder = $connWp->prepare($sqlOrder);
+
+            if (! $stmtOrder) {
+                throw new Exception("Errore SQL Prepare (Order HPOS): " . $connWp->error);
+            }
+
+            $stmtOrder->bind_param("i", $wooOrderId);
+            $stmtOrder->execute();
+            $resultOrder = $stmtOrder->get_result();
+            $orderData = $resultOrder->fetch_assoc();
+            $stmtOrder->close();
+
+            if (! $orderData) {
+                $log?->warning("Ordine $wooOrderId non trovato in {$wpPrefix}wc_orders.");
+                return null;
+            }
+
+            $orderDetails = $orderData;
+            $orderDetails['customer_id'] = $orderData['customer_id']; // RECUPERO ID UTENTE REALE
+            $orderDetails['status'] = str_replace('wc-', '', $orderData['status']);
+            $orderDetails['total'] = number_format((float) $orderData['total_amount'], 2, '.', '');
+            $orderDetails['date_updated_gmt'] = $orderData['date_updated_gmt'] ?? null;
+
+            // 2. Metadati (CF e Data Bonifico)
+            $orderDetails['billing']['cf'] = null;
+            $orderDetails['bacs_date'] = null;
+
+            $sqlMeta = "SELECT meta_key, meta_value FROM {$wpPrefix}wc_orders_meta WHERE order_id = ?";
+            $stmtMeta = $connWp->prepare($sqlMeta);
+
+            if ($stmtMeta) {
+                $stmtMeta->bind_param("i", $wooOrderId);
+                $stmtMeta->execute();
+                $resultMeta = $stmtMeta->get_result();
+
+                while ($rowMeta = $resultMeta->fetch_assoc()) {
+                    // A. Cerca la chiave passata da config (es. 'cf_user')
+                    if ($rowMeta['meta_key'] === $targetCfKey) {
+                        $orderDetails['billing']['cf'] = $rowMeta['meta_value'];
+                    }
+                    // B. Fallback: cerca 'billing_cf' standard
+                    if (empty($orderDetails['billing']['cf']) && $rowMeta['meta_key'] === 'billing_cf') {
+                        $orderDetails['billing']['cf'] = $rowMeta['meta_value'];
+                    }
+                    // C. Fallback: cerca 'billing_business_cf' o '_billing_business_cf'
+                    if (empty($orderDetails['billing']['cf']) && ($rowMeta['meta_key'] === 'billing_business_cf' || $rowMeta['meta_key'] === '_billing_business_cf')) {
+                        $orderDetails['billing']['cf'] = $rowMeta['meta_value'];
+                    }
+                    // D. Data Bonifico
+                    if ($rowMeta['meta_key'] === 'bacs_date') {
+                        $orderDetails['bacs_date'] = $rowMeta['meta_value'];
+                    }
+                }
+                $stmtMeta->close();
+            }
+
+            // 3. Items
+            $lineItems = [];
+            $sqlItems = "SELECT product_id, product_qty, product_net_revenue, tax_amount FROM {$wpPrefix}wc_order_product_lookup WHERE order_id = ?";
+            $stmtItems = $connWp->prepare($sqlItems);
+
+            if ($stmtItems) {
+                $stmtItems->bind_param("i", $wooOrderId);
+                $stmtItems->execute();
+                $resultItems = $stmtItems->get_result();
+                while ($rowItem = $resultItems->fetch_assoc()) {
+                    $lineTotal = (float) ($rowItem['product_net_revenue'] ?? 0) + (float) ($rowItem['tax_amount'] ?? 0);
+                    $lineItems[] = [
+                        'product_id' => (int) $rowItem['product_id'],
+                        'quantity' => (int) $rowItem['product_qty'],
+                        'total' => number_format($lineTotal, 2, '.', '')
+                    ];
+                }
+                $stmtItems->close();
+            }
+            $orderDetails['line_items'] = $lineItems;
+
+        } else {
+            // --- FLUSSO LEGACY (Vecchio - posts/postmeta) ---
+            // 1. Ordine
+            $sqlOrder = "SELECT ID as id, post_status as status, post_date_gmt as date_created_gmt, post_modified_gmt as date_updated_gmt FROM {$wpPrefix}posts WHERE ID = ? AND post_type = 'shop_order' LIMIT 1";
+            $stmtOrder = $connWp->prepare($sqlOrder);
+
+            if (! $stmtOrder) {
+                throw new Exception("Errore SQL Prepare (Order Legacy): " . $connWp->error);
+            }
+
+            $stmtOrder->bind_param("i", $wooOrderId);
+            $stmtOrder->execute();
+            $resultOrder = $stmtOrder->get_result();
+            $orderData = $resultOrder->fetch_assoc();
+            $stmtOrder->close();
+
+            if (! $orderData) {
+                $log?->warning("Ordine $wooOrderId non trovato in {$wpPrefix}posts.");
+                return null;
+            }
+
+            $orderDetails = $orderData;
+            $orderDetails['status'] = str_replace('wc-', '', $orderData['status']);
+            $orderDetails['date_updated_gmt'] = $orderData['date_updated_gmt'] ?? null;
+
+            // 2. Metadati (CF, Totale, Customer ID, Data Bonifico)
+            $orderDetails['billing']['cf'] = null;
+            $orderDetails['bacs_date'] = null;
+            $orderDetails['customer_id'] = 0;
+            $orderDetails['total'] = '0.00';
+
+            $sqlMeta = "SELECT meta_key, meta_value FROM {$wpPrefix}postmeta WHERE post_id = ?";
+            $stmtMeta = $connWp->prepare($sqlMeta);
+
+            if ($stmtMeta) {
+                $stmtMeta->bind_param("i", $wooOrderId);
+                $stmtMeta->execute();
+                $resultMeta = $stmtMeta->get_result();
+
+                while ($rowMeta = $resultMeta->fetch_assoc()) {
+                    if ($rowMeta['meta_key'] === '_customer_user') {
+                        $orderDetails['customer_id'] = (int)$rowMeta['meta_value'];
+                    }
+                    if ($rowMeta['meta_key'] === '_order_total') {
+                        $orderDetails['total'] = number_format((float)$rowMeta['meta_value'], 2, '.', '');
+                    }
+                    // A. Cerca la chiave passata da config (es. 'cf_user')
+                    if ($rowMeta['meta_key'] === $targetCfKey) {
+                        $orderDetails['billing']['cf'] = $rowMeta['meta_value'];
+                    }
+                    // B. Fallback: cerca 'billing_cf' standard
+                    if (empty($orderDetails['billing']['cf']) && $rowMeta['meta_key'] === 'billing_cf') {
+                        $orderDetails['billing']['cf'] = $rowMeta['meta_value'];
+                    }
+                    // C. Fallback: cerca 'billing_business_cf' o '_billing_business_cf'
+                    if (empty($orderDetails['billing']['cf']) && ($rowMeta['meta_key'] === 'billing_business_cf' || $rowMeta['meta_key'] === '_billing_business_cf')) {
+                        $orderDetails['billing']['cf'] = $rowMeta['meta_value'];
+                    }
+                    // D. Data Bonifico
+                    if ($rowMeta['meta_key'] === 'bacs_date') {
+                        $orderDetails['bacs_date'] = $rowMeta['meta_value'];
+                    }
+                }
+                $stmtMeta->close();
+            }
+
+            // 3. Items (Legacy - woocommerce_order_items & itemmeta)
+            $lineItems = [];
+            $sqlItems = "SELECT oi.order_item_id FROM {$wpPrefix}woocommerce_order_items oi WHERE oi.order_id = ? AND oi.order_item_type = 'line_item'";
+            $stmtItems = $connWp->prepare($sqlItems);
+
+            if ($stmtItems) {
+                $stmtItems->bind_param("i", $wooOrderId);
+                $stmtItems->execute();
+                $resultItems = $stmtItems->get_result();
+                while ($rowItem = $resultItems->fetch_assoc()) {
+                    $itemId = $rowItem['order_item_id'];
+                    
+                    $productId = 0;
+                    $qty = 0;
+                    $itemTotal = 0.0;
+                    
+                    $sqlItemMeta = "SELECT meta_key, meta_value FROM {$wpPrefix}woocommerce_order_itemmeta WHERE order_item_id = ?";
+                    $stmtItemMeta = $connWp->prepare($sqlItemMeta);
+                    if ($stmtItemMeta) {
+                        $stmtItemMeta->bind_param("i", $itemId);
+                        $stmtItemMeta->execute();
+                        $resultItemMeta = $stmtItemMeta->get_result();
+                        while ($rowMeta = $resultItemMeta->fetch_assoc()) {
+                            if ($rowMeta['meta_key'] === '_product_id') {
+                                $productId = (int)$rowMeta['meta_value'];
+                            }
+                            if ($rowMeta['meta_key'] === '_qty') {
+                                $qty = (int)$rowMeta['meta_value'];
+                            }
+                            if ($rowMeta['meta_key'] === '_line_total') {
+                                $itemTotal = (float)$rowMeta['meta_value'];
+                            }
+                        }
+                        $stmtItemMeta->close();
+                    }
+                    
+                    if ($productId > 0) {
+                        $lineItems[] = [
+                            'product_id' => $productId,
+                            'quantity' => $qty,
+                            'total' => number_format($itemTotal, 2, '.', '')
+                        ];
+                    }
+                }
+                $stmtItems->close();
+            }
+            $orderDetails['line_items'] = $lineItems;
+        }
+    } catch (Exception $e) {
+        $log?->error("Errore dettagli ordine $wooOrderId: " . $e->getMessage());
+        return null;
+    }
+    return $orderDetails;
+}
+
+function findMoodleCourseId(int $productId, string $wpDbName, string $wpPrefix): ?int
+{
+    global $log;
+    $connWp = DBConnector::getWpDbByName($wpDbName);
+    if (! $connWp)
+        return null;
+
+    $courseId = null;
+    try {
+        $sql = "SELECT meta_value FROM {$wpPrefix}postmeta WHERE post_id = ? AND meta_key = 'moodle_course_id' LIMIT 1";
+        $stmt = $connWp->prepare($sql);
+        $stmt->bind_param("i", $productId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        if ($row && is_numeric($row['meta_value'])) {
+            $courseId = (int) $row['meta_value'];
+        }
+        $stmt->close();
+    } catch (Exception $e) {}
+    return $courseId;
+}
+
+function findMoodleUserByCF(string $cf, string $moodleDbName): ?int
+{
+    global $log;
+    if (! defined('MOODLE_CF_SHORTNAME'))
+        return null;
+    $connMoodle = DBConnector::getMoodleDbByName($moodleDbName);
+    if (! $connMoodle)
+        return null;
+
+    $userId = null;
+    try {
+        $sqlField = "SELECT id FROM mdl_user_info_field WHERE shortname = ? LIMIT 1";
+        $stmtField = $connMoodle->prepare($sqlField);
+        $cfShort = MOODLE_CF_SHORTNAME;
+        $stmtField->bind_param("s", $cfShort);
+        $stmtField->execute();
+        $fieldRow = $stmtField->get_result()->fetch_assoc();
+        $stmtField->close();
+
+        if ($fieldRow) {
+            $fieldId = $fieldRow['id'];
+            $sqlData = "SELECT userid FROM mdl_user_info_data WHERE fieldid = ? AND UPPER(data) = UPPER(?) LIMIT 1";
+            $stmtData = $connMoodle->prepare($sqlData);
+            $stmtData->bind_param("is", $fieldId, $cf);
+            $stmtData->execute();
+            $dataRow = $stmtData->get_result()->fetch_assoc();
+            if ($dataRow)
+                $userId = $dataRow['userid'];
+            $stmtData->close();
+        }
+    } catch (Exception $e) {}
+    return $userId;
+}
+
+// Inserimento Helper
+// Cambia int $courseId in string $courseId
+function insertIntoMoodlePayments(int $userId, string $courseId, string $dbName, string $paymentId, float $cost, string $method, ?string $customDate = null, string $transactionId = ''): bool
+{
+    $appMode = defined('APP_MODE') ? APP_MODE : 'PRODUCTION';
+    if ($appMode === 'TEST') {
+        // Passiamo il transactionId alla funzione CSV
+        return insertIntoMoodlePayments_TEST_CSV($userId, $courseId, $dbName, $paymentId, $cost, $method, $customDate, $transactionId);
+    } else {
+        // Lo passiamo anche alla PROD (per quando sarai pronto)
+        return insertIntoMoodlePayments_PROD($userId, $courseId, $dbName, $paymentId, $cost, $method, $customDate, $transactionId);
+    }
+}
+
+function insertIntoMoodlePayments_TEST_CSV(int $userId, string $courseId, string $dbName, string $paymentId, float $cost, string $method, ?string $customDate = null, string $transactionId = ''): bool
+{
+    if (! defined('TEST_OUTPUT_FILE')) return false;
+    
+    $timestampToWrite = $customDate ? $customDate : date('Y-m-d H:i:s');
+    
+    // AGGIORNAMENTO: Inseriamo il $transactionId come nuova colonna nel log.
+    // L'abbiamo inserito subito dopo il timestamp per trovarlo facilmente nel file.
+    $logLine = [
+        $timestampToWrite,
+        $transactionId,   // <--- NUOVA COLONNA (ID Transazione PayPal)
+        $userId,
+        $courseId,
+        $dbName,
+        $paymentId,
+        number_format($cost, 2, '.', ''),
+        $method,
+        '0'
+    ];
+    
+    $fileHandle = fopen(TEST_OUTPUT_FILE, 'a');
+    if ($fileHandle === false) return false;
+    
+    fputcsv($fileHandle, $logLine, ';');
+    fclose($fileHandle);
+    
+    return true;
+}
+
+// woocommerce_helpers.php
+function insertIntoMoodlePayments_PROD($userId, $courseId, $moodleDbName, $paymentId, $cost, $method, $dateToUse = null, $transactionId = ''): bool
+{
+    global $log;
+    $conn = DBConnector::getMoodleAppsDb();
+    if (! $conn)
+        return false;
+
+    $finalDate = $dateToUse ? $dateToUse : date('Y-m-d H:i:s');
+
+    // SQL AGGIORNATO: Inseriamo il campo transaction_id
+    $sql = "INSERT INTO moodle_payments (transaction_id, userid, courseid, payment_id, cost, method, data_ins, mdl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+    try {
+        $stmt = $conn->prepare($sql);
+        if (! $stmt)
+            return false;
+
+        $userId = (int) $userId;
+        $paymentId = (int) $paymentId;
+        $cost = (float) $cost;
+
+        // BIND_PARAM: 's' per transaction_id, poi il resto come prima
+        // Stringa tipi: "sisidsss"
+        $stmt->bind_param("sisidsss", $transactionId, $userId, $courseId, $paymentId, $cost, $method, $finalDate, $moodleDbName);
+
+        $res = $stmt->execute();
+        $stmt->close();
+        return $res;
+    } catch (Exception $e) {
+        $log?->error("ECCEZIONE Insert PROD: " . $e->getMessage());
+        return false;
+    }
+}
+
+function queueWooOrderForProcessing(string $wooOrderId, array $instanceConfig): array
+{
+    global $log;
+    $result = [
+        'success' => false,
+        'error' => null
+    ];
+
+    $cfMetaKey = $instanceConfig['cf_meta_key'] ?? 'billing_cf';
+    $orderDetails = getWooCommerceOrderDetails_FROM_DB($wooOrderId, $instanceConfig['wc_db_name'], $instanceConfig['wc_db_prefix'], $cfMetaKey);
+
+    if (! $orderDetails) {
+        $result['error'] = "Dettagli ordine $wooOrderId non trovati.";
+        return $result;
+    }
+
+    // --- GESTIONE DATA (BACS o Altro) ---
+    $dateToUse = null;
+    $isPayPal = isset($instanceConfig['is_paypal']) && $instanceConfig['is_paypal'] === true;
+    $transactionId = $instanceConfig['paypal_transaction_id'] ?? '';
+
+    if (! $isPayPal) {
+        if (empty($orderDetails['bacs_date'])) {
+            $result['error'] = "Manca data manuale del bonifico (bacs_date).";
+            return $result;
+        }
+        $dateObj = DateTime::createFromFormat('d/m/Y', $orderDetails['bacs_date']);
+        $dateToUse = $dateObj ? $dateObj->format('Y-m-d H:i:s') : null;
+    } else {
+        $dateToUse = $orderDetails['date_updated_gmt'] ?? date('Y-m-d H:i:s');
+    }
+
+    if (! $dateToUse)
+        return [
+            'success' => false,
+            'error' => "Data non valida."
+        ];
+
+    // --- NUOVA LOGICA: ACCORPAMENTO CORSI ---
+    $moodleUserId = (int) ($orderDetails['customer_id'] ?? 0);
+    $moodleDbName = $instanceConfig['moodle_db_name'] ?? 'N/A';
+    $lineItems = $orderDetails['line_items'] ?? [];
+
+    // Creiamo un array con tutti i product_id
+    $allCourseIds = [];
+    foreach ($lineItems as $item) {
+        $allCourseIds[] = (int) $item['product_id'];
+    }
+
+    // Trasformiamo l'array in stringa JSON per il database
+    $courseIdJson = json_encode($allCourseIds);
+
+    // Usiamo il totale reale dell'ordine (comprensivo di bolli/tasse)
+    $totalOrder = (float) $orderDetails['total'];
+    $methodLabel = $isPayPal ? 'woocommerce' : 'manual';
+
+    // Eseguiamo UN SOLO inserimento per tutto l'ordine
+    $ok = insertIntoMoodlePayments($moodleUserId, $courseIdJson, // Passiamo la stringa JSON invece di un singolo ID
+    $moodleDbName, $wooOrderId, $totalOrder, $methodLabel, $dateToUse, $transactionId);
+
+    $result['success'] = $ok;
+    if (! $ok)
+        $result['error'] = "Errore durante il salvataggio nel database locale.";
+
+    return $result;
+}
+
+/**
+ * Recupera gli ID degli ordini pagati con bonifico (bacs) in un range di date.
+ */
+function getBacsOrderIdsFromDB(string $wpDbName, string $wpPrefix, string $startDate, string $endDate, array $statuses = [
+    'wc-processing'
+]): array
+{
+    global $log;
+    $orderIds = [];
+    $connWp = DBConnector::getWpDbByName($wpDbName);
+    if (! $connWp)
+        return [];
+
+    $statusPlaceholders = implode(',', array_fill(0, count($statuses), '?'));
+
+    // Rilevamento automatico HPOS / Legacy
+    $hasHPOS = false;
+    $resCheck = $connWp->query("SHOW TABLES LIKE '{$wpPrefix}wc_orders'");
+    if ($resCheck && $resCheck->num_rows > 0) {
+        $hasHPOS = true;
+    }
+
+    if ($hasHPOS) {
+        $sql = "SELECT id FROM {$wpPrefix}wc_orders
+                WHERE payment_method = 'bacs'
+                AND date_created_gmt BETWEEN ? AND ?
+                AND status IN ($statusPlaceholders)";
+    } else {
+        $sql = "SELECT DISTINCT p.ID as id FROM {$wpPrefix}posts p
+                JOIN {$wpPrefix}postmeta pm ON p.ID = pm.post_id
+                WHERE p.post_type = 'shop_order'
+                  AND pm.meta_key = '_payment_method'
+                  AND pm.meta_value = 'bacs'
+                  AND p.post_date_gmt BETWEEN ? AND ?
+                  AND p.post_status IN ($statusPlaceholders)";
+    }
+
+    try {
+        $stmt = $connWp->prepare($sql);
+        if ($stmt) {
+            $types = "ss" . str_repeat("s", count($statuses));
+            $params = array_merge([
+                $startDate,
+                $endDate
+            ], $statuses);
+            $stmt->bind_param($types, ...$params);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                $orderIds[] = $row['id'];
+            }
+            $stmt->close();
+        }
+        if (! empty($orderIds)) {
+            $log?->info("Trovati " . count($orderIds) . " bonifici in $wpDbName.");
+        }
+    } catch (Exception $e) {
+        $log?->error("Errore ricerca bonifici in $wpDbName: " . $e->getMessage());
+    }
+    return $orderIds;
+}
+?>

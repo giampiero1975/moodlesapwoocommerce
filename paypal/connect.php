@@ -1,9 +1,11 @@
 <?php
 // Configurazione database
-$host = 'dbmoodle.met.dmz';
+$host = 'localhost';
 $db = 'mdlapps_moodleadmin';
-$user = 'moodle';
-$pass = 'RmnPbT78';
+$user = 'root';
+$pass = '';
+
+define('PAYPAL_SEND_EMAIL_NOTIFICATIONS', false);
 
 // Connessione al database
 $conn = new mysqli($host, $user, $pass, $db);

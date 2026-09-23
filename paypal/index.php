@@ -193,7 +193,9 @@ foreach ($receivedPayments as $tx) {
 
         if ($insert_stmt->execute()) {
             echo "Nuovo pagamento salvato correttamente per ID: $transaction_id<br>";
-            sendNotificationEmail($tx); // 📧 Invio email per la nuova transazione
+            if (defined('PAYPAL_SEND_EMAIL_NOTIFICATIONS') && PAYPAL_SEND_EMAIL_NOTIFICATIONS) {
+                sendNotificationEmail($tx);
+            }
         } else {
             echo "Errore durante il salvataggio della transazione $transaction_id: " . $conn->error;
         }
