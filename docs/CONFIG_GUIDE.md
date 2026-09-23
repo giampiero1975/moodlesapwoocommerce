@@ -38,6 +38,160 @@ Per testare scarico PayPal reale senza scrivere sui DB produzione:
 - `DB_*_MDLAPPS` deve puntare al DB locale/test, perche li avvengono le scritture su `moodle_payments`, `results`, `invoice`.
 - `ENABLE_EMAIL_NOTIFICATIONS` va messo a `false` se non si vogliono notifiche operative.
 
+## Casistiche operative frequenti
+
+### Aggiungere una nuova istanza WooCommerce
+
+File da verificare/modificare:
+
+- `woocommerce/config_db.php`
+- `inc/config.php`
+- eventuali credenziali WooCommerce/API usate da `Model/WooCommerceModel.php`
+
+Passaggi:
+
+1. Aggiungere una voce in `WC_INSTANCE_MAPPING`.
+2. Definire il prefisso PayPal/WooCommerce, esempio `{MeiOSS}`.
+3. Impostare:
+   - `wc_db_name`
+   - `wc_db_prefix`
+   - `moodle_db_name`
+   - `cf_meta_key`
+4. Verificare che il prefisso combaci con `invoice_id` PayPal.
+5. Verificare che lo SKU/prodotto WooCommerce corrisponda all'articolo SAP.
+6. Eseguire un test da riconciliazione prima del batch automatico.
+
+Punti da controllare nei log:
+
+- `PayPal: Rilevato Ordine WC`
+- `DEBUG MATCH REGEX`
+- `Ordine ... accodato OK`
+- presenza riga in `moodle_payments`.
+
+### Cambio DB, DNS o host
+
+File da verificare:
+
+- `inc/config.php`
+- `woocommerce/config_db.php`
+- `setInvoiceCurl.php`
+- eventuali riferimenti hardcoded cercando nel repo con:
+
+```bash
+rg "vecchio-dns|vecchio-host|METMI_LIVE|METMI_TEST|db\.|moodlesap"
+```
+
+Controlli principali:
+
+- `inc/config.php`
+  - `URL`
+  - `REQUESTDB`
+- `woocommerce/config_db.php`
+  - `WP_DB_HOST`
+  - `MOODLE_DB_HOST`
+  - `DB_HOST_MDLAPPS`
+  - `PAYPAL_ENVIRONMENT`
+- `setInvoiceCurl.php`
+  - URL chiamata `/index.php/sap/ins?id=...`
+
+Regola importante:
+
+- `WP_DB_*` legge WooCommerce.
+- `MOODLE_DB_*` legge Moodle specifici.
+- `DB_*_MDLAPPS` legge/scrive `moodle_payments`, `results`, `invoice`.
+- `REQUESTDB` decide il DB SAP usato negli XML.
+
+### Regole scarico PayPal/WooCommerce
+
+Entry point:
+
+- `woocommerce/index.php`
+
+Flusso:
+
+1. Legge transazioni PayPal via API.
+2. Estrae `invoice_id`.
+3. Se il prefisso combacia con `WC_INSTANCE_MAPPING`, tratta il pagamento come WooCommerce.
+4. Legge ordine da DB WordPress/WooCommerce.
+5. Legge eventuali dati Moodle necessari.
+6. Accoda in `moodle_payments`.
+7. Se non riconosce la transazione come WooCommerce, salva in `results`.
+
+Dove scrive:
+
+- `moodle_payments`: pagamenti WooCommerce riconosciuti.
+- `results`: pagamenti PayPal non riconosciuti come WooCommerce.
+
+Dove NON dovrebbe scrivere:
+
+- DB WordPress/WooCommerce.
+- DB Moodle specifici `mdl_*`.
+
+Campi importanti:
+
+- `transaction_id`: ID transazione PayPal.
+- `payment_id`: ID ordine WooCommerce.
+- `method`: `woocommerce` o `manual`.
+- `sales`: `0` da evadere, `1` evasa.
+- `logfile`: log associato oppure lock/errore.
+
+### Regole batch fatture
+
+Entry point:
+
+- `setInvoiceCurl.php`
+
+Flusso:
+
+1. Esegue guardian.
+2. Esegue pulizia giornaliera file vecchi.
+3. Cerca in `moodle_payments` record con `sales='0'` e `logfile IS NULL`.
+4. Imposta `logfile = PRENOTATO_YYYYMMDD_HHMMSS`.
+5. Chiama `/index.php/sap/ins?id=...` per ogni record.
+6. Attende 120 secondi tra una chiamata e l'altra.
+
+### Regole chiamata singola fattura
+
+Entry point:
+
+- `/index.php/sap/ins?id=ID`
+- controller: `Controller/Api/UserController.php`
+
+Protezioni attese:
+
+- lock con `IN_CORSO_YYYYMMDD_HHMMSS`
+- controllo `invoice` gia presente
+- insert idempotente in `invoice`
+- update finale di `moodle_payments.sales=1`
+- log specifico `ID_YYYYMMDD_HHMMSS.log`
+
+Se arriva una seconda chiamata ravvicinata:
+
+- deve fermarsi con stato `IN_CORSO_*`.
+- non deve generare seconda fattura.
+
+### Log da controllare
+
+- `logs/YYYYMMDD.log`
+  - ingressi URL e chiamate ricevute.
+- `logs/ID_YYYYMMDD_HHMMSS.log`
+  - flusso completo della singola fattura.
+- `woocommerce/logs/paypal_cron-YYYY-MM-DD.log`
+  - scarico PayPal/WooCommerce.
+- `logs/cleanup_YYYYMMDD.done`
+  - pulizia giornaliera eseguita.
+
+### Checklist prima di un rilascio
+
+1. Verificare `git status`.
+2. Verificare che i config reali siano inclusi.
+3. Cercare riferimenti a host vecchi o non voluti.
+4. Controllare `REQUESTDB`.
+5. Controllare `DB_*_MDLAPPS`.
+6. Controllare URL in `setInvoiceCurl.php`.
+7. Eseguire almeno `php -l` sui file PHP modificati.
+8. Annotare la modifica in `CHANGELOG_OPERATIVO.md`.
+
 ## Batch fatture
 
 ### `setInvoiceCurl.php`
