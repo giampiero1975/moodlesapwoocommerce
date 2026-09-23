@@ -9,6 +9,7 @@ if (!defined('PROJECT_ROOT_PATH')) {
 }
 
 require_once 'guardian/check.php';
+require_once 'cleanup_old_files.php';
 
 // Se il sistema non è VERDE, il batch viene interrotto (il blocco è gestito in guardian/check.php)
 // Ma per sicurezza extra se check.php non avesse fatto exit, lo facciamo qui:
@@ -19,6 +20,8 @@ if ($stats['stato'] !== 'VERDE') {
 // --- START BATCH ---
 
 try {
+    runDailyCleanupBeforeBatch();
+
 	// 1. GENERAZIONE BATCH ID
     $batchID = "PRENOTATO_" . date("Ymd_His");
 	
@@ -55,7 +58,7 @@ try {
             continue; // <--- IL SALVAGENTE!
         }
 		
-        $url = "http://moodlesapwoocommerce.metmi.lan/index.php/sap/ins?"; # url di ese
+        $url = "http://moodlesapwoocommerce.mei.it/index.php/sap/ins?"; # url di ese
         $url .= "id=" . $current_id;
         echo "<br>".$url;
 
@@ -84,3 +87,23 @@ try {
     echo $url . "<br>Err: " . $e->getMessage();
     echo $url . "<br>Code: " . $e->getCode();
 }
+
+function runDailyCleanupBeforeBatch()
+{
+    $markerFile = PROJECT_ROOT_PATH . 'logs' . DIRECTORY_SEPARATOR . 'cleanup_' . date('Ymd') . '.done';
+
+    if (file_exists($markerFile)) {
+        echo "Pulizia file vecchi gia' eseguita oggi.\n";
+        return;
+    }
+
+    $result = runOldFilesCleanup(true);
+    echo $result['output'];
+
+    if (!is_dir(dirname($markerFile))) {
+        mkdir(dirname($markerFile), 0775, true);
+    }
+
+    file_put_contents($markerFile, date('Y-m-d H:i:s') . ' deleted=' . $result['totals']['deleted'] . ' errors=' . $result['totals']['errors'] . PHP_EOL);
+}
+

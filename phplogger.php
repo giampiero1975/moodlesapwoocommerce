@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Rome');
 define("DATESTRING_FULL", "Y-m-d D H:i:s");
 
 /**
@@ -82,6 +83,28 @@ class Logger
     
     public function getName(){
         return $this->logname;
+    }
+
+    public function useLogFile($fileName)
+    {
+        $default_log_path = __DIR__.'/logs';
+        if(!is_dir($default_log_path))
+        {
+            mkdir($default_log_path, 0777, true);
+        }
+
+        $safeFileName = basename($fileName);
+        if ($safeFileName === '' || pathinfo($safeFileName, PATHINFO_EXTENSION) !== 'log') {
+            $safeFileName = date('Ymd_His') . '.log';
+        }
+
+        if ($this->log_handle) {
+            fclose($this->log_handle);
+        }
+
+        $this->user_handle = false;
+        $this->logname = $default_log_path.'/'.$safeFileName;
+        $this->log_handle = fopen($this->logname, 'a');
     }
     /*
      * This method writes the log messages to the log file. This method internally calls the
